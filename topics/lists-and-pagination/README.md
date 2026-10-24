@@ -56,7 +56,7 @@ flowchart LR
   State["useState: filters"] -- "effect copies" --> URL["URL"]
   URL -- "effect copies back" --> State
   State -- "fetch" --> API["Catalogue API"]
-  URL -- "fetch again?" --> API
+  URL -- "double fetch" --> API
 ```
 
 **One source of truth:**
@@ -87,12 +87,31 @@ URLs come from outside your app: people edit them and bots send garbage. Give ev
 
 ## Push or replace
 
-A control changes the URL with the History API. Choose the method by what "back" should mean:
+A control changes the URL with the History API. `history.pushState` and `history.replaceState` both change the URL without loading a page; your app stays and re-renders. They differ in what they do to the browser's history, the stack of entries that back walks through:
+
+```mermaid
+flowchart TB
+  subgraph Start["Start: back goes to /"]
+    direction LR
+    s1["/"] --> s2["/items"]
+  end
+  subgraph Push["pushState ?category=tools: back goes to /items"]
+    direction LR
+    p1["/"] --> p2["/items"] --> p3["/items?category=tools"]
+  end
+  subgraph Replace["replaceState ?q=drill: back goes to /"]
+    direction LR
+    r1["/"] --> r2["/items?q=drill"]
+  end
+  Start ~~~ Push ~~~ Replace
+```
+
+Choose the method by what "back" should mean:
 
 | Method                 | Browser history              | Use for                                                           |
 | ---------------------- | ---------------------------- | ----------------------------------------------------------------- |
-| `history.pushState`    | adds an entry                | a category, the sort order, a page number: back undoes the choice |
-| `history.replaceState` | overwrites the current entry | typing, a slider, "load more": back leaves the list               |
+| `history.pushState`    | adds an entry on top         | a category, the sort order, a page number: back undoes the choice |
+| `history.replaceState` | swaps the top entry          | typing, a slider, "load more": back leaves the list               |
 
 Docs: [pushState](https://developer.mozilla.org/en-US/docs/Web/API/History/pushState), [replaceState](https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState)
 
@@ -127,7 +146,7 @@ export const listParsers = {
 };
 ```
 
-A control reads and writes through these parsers. Here a category chip:
+A control reads and writes through these parsers. `useQueryStates` handles several keys in one hook and one update; `useQueryState` handles a single key. Setting a key to `null` removes it from the URL. Here a category chip:
 
 ```tsx
 const [{ category }, setParams] = useQueryStates(listParsers);
@@ -140,7 +159,7 @@ const selectCategory = (next: string) =>
 What nuqs does for you:
 
 - An invalid value returns the default: `?sort=<script>` reads as `"relevance"`.
-- Setting `null`, or the default, removes the key, so the plain list keeps a short URL.
+- Setting the default also removes the key, so the plain list keeps a short URL.
 - Writes use `replace` unless you ask for `push`.
 
 nuqs checks types, not ranges: `?page=-3` reads as `-3`. Clamp the page before you send it to the API.
@@ -151,33 +170,37 @@ Docs: [nuqs adapters](https://nuqs.dev/docs/adapters), [basic usage](https://nuq
 
 The user picks a category, and the list vanishes behind a spinner. On a slow connection the page jumps and the user loses their place. Keep the old list on screen, dimmed, until the new one is ready.
 
+React's `useDeferredValue` does this. It needs a list that **suspends**: the component is not ready yet because its data is still loading, so React waits for it. Data libraries such as TanStack Query (`useSuspenseQuery`) suspend for you.
+
+The list page holds two values: `search`, what the URL says now, and `shownSearch`, the deferred copy the list renders. React renders the new value in the background and switches only once nothing suspends:
+
 ```mermaid
-flowchart LR
-  Click["Click a filter"] --> Url["URL changes"]
-  Url --> Old["Old list stays, dimmed"]
-  Old --> Ready["New data arrives"]
-  Ready --> New["New list replaces it"]
+sequenceDiagram
+  participant U as User
+  participant R as React
+  participant S as Screen
+  participant A as API
+  U->>R: picks "tools"
+  R->>S: search = "?category=tools", shownSearch = old value
+  Note over S: old list stays, dimmed
+  R->>R: background render with shownSearch = "?category=tools"
+  R->>A: the list suspends and loads tools
+  Note over R: this render is not shown, React waits
+  A-->>R: items arrive
+  R->>R: render again: nothing suspends
+  R->>S: switch: shownSearch = "?category=tools"
+  Note over S: new list, not dimmed
 ```
 
-React's `useDeferredValue` does this. It returns the previous value until React has rendered the new one. For that, the list must **suspend**: pause rendering until its data has loaded. While it is suspended, React keeps showing the old list instead of the `<Suspense>` fallback. Relay, TanStack Query's `useSuspenseQuery` and a cached promise read with `use` all suspend.
-
-First, turn the URL state into one string. `createSerializer` from nuqs turns parsed params back into a query string:
+Compare strings, not objects: React checks whether the value changed, and a new params object differs on every render, even when the URL did not. `createSerializer` from nuqs turns the parsed params into one query string. It starts from the parsed values, so `?page=banana` and no page at all give the same string.
 
 ```tsx
-import { createSerializer, useQueryStates } from "nuqs";
-
 const serialize = createSerializer(listParsers);
 
-const [params] = useQueryStates(listParsers);
-const search = serialize(params); // "?category=tools&page=2"
-```
-
-Then the list page, the one place that reads the URL, defers that string:
-
-```tsx
 export function ItemsPage() {
-  // ...
-  // 👇 defer a string, not an object: objects differ on every render
+  const [params] = useQueryStates(listParsers);
+  // 👇 a string: equal URLs give equal values
+  const search = serialize(params); // "?category=tools&page=2"
   const shownSearch = useDeferredValue(search);
   const isStale = search !== shownSearch;
 
@@ -196,8 +219,6 @@ The fallback appears only on the first load, when there is no old list to show.
 Docs: [useDeferredValue](https://react.dev/reference/react/useDeferredValue), [aria-busy on MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy)
 
 ## Offset or cursor pagination
-
-With millions of items, nobody loads the whole list at once.
 
 **Offset pagination** says "skip 3, take 3" (`?page=2`, SQL `LIMIT 3 OFFSET 3`). Offsets count positions, not items. If a new item arrives at the top while the user reads page 1, everything moves down one place:
 
@@ -229,7 +250,7 @@ page 2:  after=C → D E F    a new item N at the top shifts nothing
 | Cost of deep pages       | grows with the offset         | about constant, with an index on the sort key |
 | Good fit                 | small lists, admin tables     | large, live lists and feeds                   |
 
-For Project 2, offset is fine. Switch to cursors when the list is large and changes while people read it. GraphQL APIs usually follow the [connection spec](https://relay.dev/graphql/connections.htm): you send `first` and `after`, and get back `pageInfo.endCursor` and `hasNextPage`.
+For Project 2, offset is fine. Switch to cursors when the list is large and changes while people read it.
 
 ## "Load more" that survives the back button
 
@@ -247,8 +268,11 @@ sequenceDiagram
   U->>P: opens item 63, then presses back
   P->>A: first 96 items
   A-->>P: 96 items in one response
-  P-->>U: same list, same height, scroll restored
+  P-->>U: same list, same height
+  Note over U: the browser restores the scroll position
 ```
+
+The browser restores the scroll position on back by itself. That works only because the list is as long as before.
 
 Here `useItems` stands for your data hook: it loads the first `first` items and tells you whether more exist.
 
@@ -273,11 +297,9 @@ export function ItemFeed() {
 }
 ```
 
-Each click refetches the whole visible list: 48 items, then 72. That is the price of one rule, "the URL says how many, the list shows that many", and the cap keeps it small. If it hurts, Relay's `usePaginationFragment` can load the first `count` once, then only the next 24 after the last cursor.
+Each click refetches the whole visible list: 48 items, then 72. That is the price of one rule, "the URL says how many, the list shows that many", and the cap keeps it small.
 
-nuqs writes with `replace` by default, so back leaves the list instead of undoing one click at a time.
-
-Docs: [scrollRestoration on MDN](https://developer.mozilla.org/en-US/docs/Web/API/History/scrollRestoration), [Relay pagination](https://relay.dev/docs/guided-tour/list-data/pagination/)
+Docs: [scrollRestoration on MDN](https://developer.mozilla.org/en-US/docs/Web/API/History/scrollRestoration)
 
 <details>
 <summary>Going further: numbered pages, "load more" or infinite scroll</summary>
@@ -292,6 +314,10 @@ Docs: [scrollRestoration on MDN](https://developer.mozilla.org/en-US/docs/Web/AP
 Crawlers do not click buttons or scroll; they follow `<a href>` links, so give every chunk its own URL, such as `?page=3`, and link to it.
 
 Docs: [Google: pagination and incremental page loading](https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading)
+
+If refetching the whole list on every click hurts, Relay's `usePaginationFragment` loads the first `count` once, then only the next 24 after the last cursor.
+
+Docs: [Relay pagination](https://relay.dev/docs/guided-tour/list-data/pagination/)
 
 </details>
 
@@ -308,6 +334,6 @@ Docs: [Google: pagination and incremental page loading](https://developers.googl
 - [nuqs documentation](https://nuqs.dev/docs)
 - [MDN: Working with the History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API/Working_with_the_History_API)
 - [React: useDeferredValue](https://react.dev/reference/react/useDeferredValue)
-- [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm)
+- [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), the cursor format most GraphQL APIs follow: you send `first` and `after`, and get back `pageInfo.endCursor` and `hasNextPage`
 - [TanStack Query: Infinite queries](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries)
 - [Markus Winand: We need tool support for keyset pagination](https://use-the-index-luke.com/no-offset), on why offsets get slow

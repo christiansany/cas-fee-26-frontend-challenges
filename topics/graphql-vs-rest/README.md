@@ -81,17 +81,17 @@ Docs: [JSON:API: inclusion and sparse fieldsets](https://jsonapi.org/format/#fet
 
 If you know REST, you know most of the ideas already:
 
-| REST | GraphQL |
-| --- | --- |
-| An endpoint, `GET /items/:id` | A field on `Query`, `item(id: ...)` |
-| `GET` | A query |
-| `POST`, `PUT`, `DELETE` | A mutation |
-| A DTO, the shape of a JSON body | A type |
-| An OpenAPI document | The schema |
-| A route handler | A resolver |
-| The status code | The `errors` list in the response body |
+| REST | GraphQL | In plain words |
+| --- | --- | --- |
+| An OpenAPI document | The **schema** | Every type and field the API offers |
+| A DTO, the shape of a JSON body | A **type** | One named shape, such as `Item` |
+| An endpoint, `GET /items/:id` | A field on `Query`, `item(id: ...)` | An entry point for reading |
+| `GET` | A **query** | A read that lists the fields it wants |
+| `POST`, `PUT`, `DELETE` | A **mutation** | A write |
+| A route handler | A **resolver** | The server function behind one field |
+| The status code | The `errors` list | Errors travel in the response body |
 
-**The schema** describes every type and field, like a TypeScript interface for the whole API. `type Query` is the entry point: its fields are where queries start, like your `GET` routes. `!` means "never null".
+**The schema** is like a TypeScript interface for the whole API. `type Query` lists the entry points for reading, like your `GET` routes. `item(id: ID!)` takes an argument, `[Review!]` is a list of reviews, and `!` means "never null".
 
 ```graphql
 type Query {
@@ -114,11 +114,16 @@ type User {
 type Review {
   rating: Int!
   text: String!
-  author: User!
 }
 ```
 
-On the server, a **resolver** function produces each field's value. The resolver for `Item.owner` calls the Users service.
+On the server, each field has a **resolver**. The one for `Item.owner` calls the Users service:
+
+```mermaid
+flowchart LR
+    Q["owner in the query"] --> R["resolver for Item.owner"]
+    R --> U["Users service<br/>GET /users/7"]
+```
 
 **A query** names the fields the client wants, and the response has the same shape. `$id` is a **variable** of type `ID!`: its value travels next to the query as JSON, like a route parameter.
 
@@ -175,17 +180,9 @@ If the Reviews service fails, the rest still arrives, with `reviews` set to `nul
 }
 ```
 
-The HTTP status is a 2xx, usually `200`, so check `errors` yourself. Had the schema declared `reviews` never null, the `null` would move up to the nearest field that may be null: the whole `item`.
+The HTTP status is still a 2xx, usually `200`, so check `errors` yourself. Only a request the server cannot run at all, such as an invalid query, can get a 4xx.
 
-**Mutations** are writes. They return the fields you ask for after the change:
-
-```graphql
-mutation ReserveItem($itemId: ID!) {
-  reserveItem(itemId: $itemId) {
-    status
-  }
-}
-```
+Writes look the same, with the keyword `mutation` instead of `query`, and return the fields you ask for after the change.
 
 Docs: [Queries](https://graphql.org/learn/queries/), [Schemas and types](https://graphql.org/learn/schema/), [Mutations](https://graphql.org/learn/mutations/), [Response](https://graphql.org/learn/response/), [Serving over HTTP](https://graphql.org/learn/serving-over-http/)
 
@@ -198,22 +195,19 @@ Several subgraphs contribute fields to the same type. `@key` says how to identif
 
 ```graphql
 # Catalogue subgraph
-extend schema
-  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
-
 type Item @key(fields: "id") {
   id: ID!
   title: String!
 }
 
-# Reviews subgraph (with the same @link header)
+# Reviews subgraph
 type Item @key(fields: "id") {
   id: ID!
   reviews(first: Int!): [Review!]
 }
 ```
 
-This is Apollo Federation 2 syntax. Federation needs real infrastructure: the gateway, a schema registry that checks every subgraph change against the others, and usually a team that runs both.
+This is Apollo Federation syntax, with the `@link` header that imports `@key` left out.
 
 Docs: [graphql.org: Federation](https://graphql.org/learn/federation/), [Apollo Federation: entities](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/entities/intro)
 
@@ -226,7 +220,7 @@ One query per page solves the waterfall. But who writes it?
 - If **the page** writes it, it lists every field of every team. Each new field means editing the page team's file, and nobody dares remove a field, so the query only grows.
 - If **every component** fetches its own data, the teams are independent again, but we are back to many requests and waterfalls.
 
-The answer is **colocation**: each component declares its fields next to its code, as a **fragment**. A fragment is a named list of fields on one type, and `...Name` inserts it into a query. The page composes the fragments into one query.
+The answer is **colocation**: each component declares its fields next to its code, as a **fragment**. A fragment is a named list of fields on one type, and `...Name` inserts it into a query. The page composes the fragments into one query. A name like `OwnerCard_item` means: what `OwnerCard` needs from `item`.
 
 ```mermaid
 flowchart TD
@@ -237,25 +231,27 @@ flowchart TD
     Q --> R["Reviews_item<br/>3 reviews<br/>Reviews team"]
 ```
 
-Queries and fragments are strings, so TypeScript knows nothing about them. A code generator such as GraphQL Codegen reads them with the schema and generates types, like OpenAPI codegen. Its `graphql(...)` function returns the string with its types.
-
-`OwnerCard_item` means: what `OwnerCard` needs from `item`.
+Queries and fragments are plain strings, so TypeScript cannot check them. A code generator such as GraphQL Codegen reads them with the schema and writes a type for each, like OpenAPI codegen does for REST. You wrap each string in its generated `graphql(...)` function to get that type.
 
 ```tsx
+import { graphql, type FragmentType, getFragmentData } from "./gql";
+
 export const OwnerCardFragment = graphql(`
   fragment OwnerCard_item on Item {
-    owner {
-      name
-      avatarUrl
-    }
+    owner { name avatarUrl }
   }
 `);
 
+type OwnerCardProps = { item: FragmentType<typeof OwnerCardFragment> };
+
 export function OwnerCard(props: OwnerCardProps) {
-  // ... unmask props.item, see "Going further" below
+  // 👇 unmask: only the fields of OwnerCard_item
+  const item = getFragmentData(OwnerCardFragment, props.item);
   return <p>Lent by {item.owner.name}</p>;
 }
 ```
+
+`props.item` arrives **masked**: its type hides every field. `getFragmentData` unmasks it with the component's own fragment.
 
 The page spreads the fragments into its query and hands each component the item:
 
@@ -282,7 +278,7 @@ return (
 
 The fragments become part of the query, so the page still sends one request.
 
-**Data masking:** a component sees only the fields its own fragment lists. In `ItemPage`:
+This is **data masking**: a component sees only the fields its own fragment lists. In `ItemPage`:
 
 ```tsx
 item.title; // fine: the page asked for it
@@ -298,19 +294,7 @@ Docs: [The Guild: fragments with GraphQL Codegen](https://the-guild.dev/blog/unl
 
 **Relay**, Meta's GraphQL client for React, introduced this model. Its compiler expects fragment names that start with the module name, generates the types, and masks the data at runtime too, not only in TypeScript. A component reads its fragment with the `useFragment` hook. Relay's ESLint rule `relay/unused-fields` reports fields a module requests but never reads.
 
-**GraphQL Codegen's client preset** works with any client (Apollo Client, urql or plain `fetch`) and has fragment masking on by default. The component receives a masked value and unmasks it with its own fragment:
-
-```tsx
-import { type FragmentType, getFragmentData } from "./gql";
-
-export function OwnerCard(props: { item: FragmentType<typeof OwnerCardFragment> }) {
-  // 👇 only the fields of OwnerCard_item
-  const item = getFragmentData(OwnerCardFragment, props.item);
-  return <p>Lent by {item.owner.name}</p>;
-}
-```
-
-The unmask function is called `useFragment` by default, but it is not a React hook. The docs recommend renaming it to `getFragmentData` with the `unmaskFunctionName` option.
+In GraphQL Codegen's client preset, `getFragmentData` is called `useFragment` by default, though it is not a hook. The `unmaskFunctionName` option renames it.
 
 Docs: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), [Relay: fragments](https://relay.dev/docs/guided-tour/rendering/fragments/), [eslint-plugin-relay](https://github.com/relayjs/eslint-plugin-relay), [Codegen client preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
 
@@ -322,23 +306,21 @@ GraphQL moves work from the client to the server and to tooling. Here is where i
 
 | Concern | REST | GraphQL |
 | --- | --- | --- |
-| **Caching** | The URL is the cache key. Browsers and CDNs cache a `GET` with `Cache-Control`, no extra code. | Usually a `POST` to one URL, which they do not cache. `GET` with persisted queries wins some of it back. |
-| **HTTP features** | Cookies, redirects, `sendBeacon` and multipart uploads are plain HTTP features. | No equivalent. The spec has no file type; Apollo recommends signed upload URLs. |
-| **Errors** | One status code per request. | A 2xx, usually `200`, with an `errors` list. Monitoring that counts status codes misses it. |
-| **Authorization** | Checked in each route handler. | A field can be reached through many paths, so check permissions in the service layer the resolvers call. |
-| **Expensive queries** | You know every request in advance. | Clients write their own queries: 100 items with 100 reviews and their authors is 10,000 lookups. Servers limit depth and cost, and batch lookups (N+1, below). |
-| **Tooling and running it** | `fetch` and Express. One team, one app, done. | A schema, a server a team runs, codegen, schema checks in CI, later a gateway. |
+| **Caching** | The URL is the cache key. Browsers and CDNs (shared caches near the user) store a `GET` with `Cache-Control`. | Usually a `POST` to one URL, which caches skip. A **persisted query** helps: a `GET` with a short ID for a query the server already knows. |
+| **HTTP features** | Redirects and file uploads are plain HTTP. | Not part of GraphQL. Files usually go over plain HTTP. |
+| **Errors** | One status code per request. | A failed field still returns a 2xx, usually `200`. Monitoring that counts status codes misses it. |
+| **Authorization** | Checked in each route handler. | Many queries reach the same field, so check permissions once, in the code the resolvers call. |
+| **Expensive queries** | You know every request in advance. | Clients write their own: 100 items with 100 reviews each is 10,000 reviews. Servers limit depth and cost. |
+| **Running it** | `fetch` and Express. | A schema, a server a team runs, codegen, schema checks in CI. |
 
-Docs: [Best practices](https://graphql.org/learn/best-practices/), [Authorization](https://graphql.org/learn/authorization/), [Security](https://graphql.org/learn/security/), [Apollo: file upload best practices](https://www.apollographql.com/blog/file-upload-best-practices), [MDN: `sendBeacon()`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon)
+Docs: [Best practices](https://graphql.org/learn/best-practices/), [Authorization](https://graphql.org/learn/authorization/), [Security](https://graphql.org/learn/security/), [Apollo: file upload best practices](https://www.apollographql.com/blog/file-upload-best-practices)
 
 <details>
-<summary>Going further: caching with persisted queries and trusted documents</summary>
+<summary>Going further: caching with persisted queries</summary>
 
 Queries may be sent with `GET`, which caches can store. Long queries do not fit into URL length limits, so the client sends a short identifier instead of the query text, a **persisted query**: `GET /graphql?documentId=<hash>&variables=...` (parameter names differ between tools). The server still has to send `Cache-Control`, and a response that mixes public item data with the logged-in user's data cannot be cached publicly.
 
-**Trusted documents** go further. At build time, the tooling extracts every operation from the app and registers it with the server, which then runs only registered operations. That is an allow-list: nobody can send an expensive query you never wrote. The cost: each frontend deploy must register its operations before the new code reaches users, and old operations stay registered while old clients still send them.
-
-Docs: [Serving over HTTP](https://graphql.org/learn/serving-over-http/), [Benjie Gillam: Trusted documents](https://benjie.dev/graphql/trusted-documents), [Relay: persisted queries](https://relay.dev/docs/guides/persisted-queries/)
+Docs: [Serving over HTTP](https://graphql.org/learn/serving-over-http/), [Relay: persisted queries](https://relay.dev/docs/guides/persisted-queries/)
 
 </details>
 
@@ -349,19 +331,17 @@ A list of 20 reviews, each with an `author` field, runs the `author` resolver 20
 
 ```ts
 // one loader per request, so cached users never leak between requests
-export function createLoaders(usersApi: UsersApi) {
-  return {
-    user: new DataLoader<string, User>(async (ids) => {
-      // 👇 one call for all ids
-      const users = await usersApi.getMany(ids);
-      const byId = new Map(users.map((user) => [user.id, user]));
-      return ids.map((id) => byId.get(id) ?? new Error(`User ${id} not found`));
-    }),
-  };
+export function createUserLoader(usersApi: UsersApi) {
+  return new DataLoader<string, User>(async (ids) => {
+    // 👇 one call for all ids
+    const users = await usersApi.getMany(ids);
+    return ids.map((id) => users.find((user) => user.id === id) ?? new Error(`No user ${id}`));
+  });
 }
 
-// resolver for Review.author:
-// author: (review, _args, context) => context.loaders.user.load(review.authorId)
+// resolver for Review.author, with the loader in the request context
+const author = (review: Review, _args: unknown, context: Context) =>
+  context.userLoader.load(review.authorId);
 ```
 
 The batch function must return one result per key, in the same order as the keys.
@@ -375,7 +355,7 @@ Docs: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataL
 | Situation | Use |
 | --- | --- |
 | One team, one app, a handful of resources (Project 2) | REST |
-| Public data a CDN should cache, files, cookies, redirects, webhooks | REST |
+| Public data a CDN should cache, file uploads, login redirects, webhooks | REST |
 | A page or several clients combining data from many services | GraphQL |
 | Many teams building parts of the same page | GraphQL with fragments |
 
@@ -388,8 +368,6 @@ flowchart LR
     B -->|"login, uploads, events"| R["REST routes"]
     P["Payment provider"] -->|"webhook"| R
 ```
-
-The rule of thumb: GraphQL for page data, REST for anything that needs URL caching, files, cookies or redirects.
 
 ## Takeaways
 
