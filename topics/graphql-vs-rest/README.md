@@ -1,71 +1,124 @@
 # GraphQL vs REST, and why large sites use both
 
-> You built a REST API with Express, and it does its job. Now picture the Lending Desk with dozens of teams, each running its own service, and an item page that needs data from six of them. We look at the problems GraphQL solves in that setting, how large sites usually get from REST to one federated graph, and why they still keep REST endpoints next to it. You leave with a decision table for your own projects.
+> You built a REST API with Express, and for one team and one app it is the right tool. Now picture the Lending Desk item page pulling its data from six services, each run by a different team. GraphQL lets that page ask for exactly the data it needs in one request, and lets each component declare its own part. We look at what that solves, what it costs, and why large sites run both.
 
 **Duration:** about 40 minutes
 
 ## Contents
 
 - [Where you are coming from](#where-you-are-coming-from)
+- [One page, six services](#one-page-six-services)
 - [GraphQL in five minutes](#graphql-in-five-minutes)
-- [The problems GraphQL addresses](#the-problems-graphql-addresses)
-- [A typical evolution at scale](#a-typical-evolution-at-scale)
-- [Where REST still wins](#where-rest-still-wins)
-- [What GraphQL costs](#what-graphql-costs)
+- [Each component declares its own data](#each-component-declares-its-own-data)
+- [What GraphQL costs, and where REST still wins](#what-graphql-costs-and-where-rest-still-wins)
 - [When to use which](#when-to-use-which)
 - [Takeaways](#takeaways)
 - [Further reading](#further-reading)
 
 ## Where you are coming from
 
-In an earlier evening you built a REST API with Express: one route per resource, `GET /items/:id`, `POST /reservations`, JSON in and out. For Project 2 that is a good fit. One team owns the API and the frontend, so when the item page needs a new field, you add it to the route handler and deploy both.
+In an earlier evening you built a REST API with Express: one route per resource, `GET /items/:id`, `POST /reservations`, JSON in and out. For Project 2 that fits. One team owns the API and the frontend, so when a page needs a new field, you add it to the route handler and deploy both.
 
-Now let's grow the Lending Desk. Imagine it has become a company-wide platform with millions of users. The item catalogue, availability, reservations, reviews, recommendations and notifications are each owned by a different team and run as a separate service. The item page now shows data from most of them, and the frontend team does not own any of those services.
+Now let's grow the Lending Desk into a company-wide platform with millions of users. The item catalogue, users, availability, reservations, reviews and recommendations each belong to a different team and run as a separate service. The item page shows data from all six, and the frontend team owns none of them.
 
-The questions change:
+```mermaid
+flowchart TB
+    subgraph P ["Item page /items/42"]
+        H["Title and photos<br/>Catalogue"]
+        O["Owner card<br/>Users"]
+        A["Reserve box<br/>Availability, Reservations"]
+        R["Reviews<br/>Reviews"]
+        S["Similar items<br/>Recommendations"]
+        H ~~~ O
+        H ~~~ A
+        O ~~~ R
+        A ~~~ R
+        R ~~~ S
+    end
+```
 
-- Which service do I call for which field, and in which order?
-- Who adds a field when my page needs one?
-- How do I stop downloading 50 reviews when the page shows three?
-- How does a service team change its API without breaking pages it has never seen?
+Each box is built and served by another team. **The core idea of this topic:** GraphQL lets the page fetch all of it in one request, with each component naming the fields it needs. That solves real problems when many teams share a page, but it costs things REST gives you for free, so large sites use both.
 
-GraphQL is one answer to these questions. It also brings new problems. This topic covers both.
+## One page, six services
+
+Let's load the item page from the REST services. The owner card needs the owner's name, but the item only contains `ownerId`, so the browser has to wait for the item before it can ask for the owner.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant C as Catalogue
+    participant U as Users
+    participant R as Reviews
+    B->>C: GET /items/42
+    C-->>B: item with ownerId 7
+    B->>U: GET /users/7
+    U-->>B: whole user (card needs 2 fields)
+    B->>R: GET /items/42/reviews
+    R-->>B: all 50 reviews (page shows 3)
+```
+
+Three problems show up:
+
+- **Waterfall.** Each request waits for the one before. `Promise.all` helps for independent calls, but the owner still waits for the item. On a mobile network, one round trip can take hundreds of milliseconds.
+- **Over-fetching.** The endpoint returns a fixed shape: the whole user and all reviews, though the page shows two fields and three reviews.
+- **Under-fetching.** `GET /items/42` does not contain the owner's name, so you need a second request.
+
+With GraphQL, the browser sends one request to one server. That server calls the services and returns only the fields the page asked for.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant G as GraphQL server
+    participant C as Catalogue
+    participant U as Users
+    participant R as Reviews
+    B->>G: POST /graphql (one query)
+    G->>C: item 42
+    C-->>G: item with ownerId 7
+    G->>U: user 7
+    G->>R: 3 reviews of item 42
+    U-->>G: user
+    R-->>G: reviews
+    G-->>B: only the fields asked for
+```
+
+The waterfall has not disappeared. It moved into the data centre, where a round trip takes a few milliseconds, and one team can optimise it for every page.
 
 ## GraphQL in five minutes
 
-Most of you have not used GraphQL yet, so here is enough to read the rest of this page.
+Here is enough GraphQL to read the rest of the page.
 
-**The schema** describes every type and field the API offers. It is typed, like a TypeScript interface for your whole API. The server publishes it; clients and tools read it.
+**The schema** lists every type and field the API offers, like a TypeScript interface for the whole API. `!` means "never null". Without it, a field may be `null`.
 
 ```graphql
+type Query {
+  item(id: ID!): Item # 👇 null if there is no such item
+}
+
 type Item {
   id: ID!
   title: String!
-  photos: [Photo!]!
   owner: User!
   reviews(first: Int!): [Review!]!
 }
 
 type User {
-  id: ID!
   name: String!
   avatarUrl: String
 }
 
 type Review {
-  id: ID!
   rating: Int!
   text: String!
 }
-
-type Query {
-  item(id: ID!): Item
-}
 ```
 
-`!` means "never null". `Query` is the entry point for reads.
+**A query** names the fields the client wants. The response has the same shape.
 
-**A query** asks for exactly the fields the client needs. The response has the same shape as the query.
+<table>
+<tr><th>Query</th><th>Response</th></tr>
+<tr>
+<td>
 
 ```graphql
 query ItemPage($id: ID!) {
@@ -73,9 +126,8 @@ query ItemPage($id: ID!) {
     title
     owner {
       name
-      avatarUrl
     }
-    reviews(first: 3) {
+    reviews(first: 2) {
       rating
       text
     }
@@ -83,324 +135,220 @@ query ItemPage($id: ID!) {
 }
 ```
 
-**A fragment** is a named, reusable selection of fields on one type. Large frontends use one fragment per component, so each component lists the fields it reads.
+</td>
+<td>
 
-```graphql
-fragment OwnerCard on User {
-  name
-  avatarUrl
-}
-
-query ItemPage($id: ID!) {
-  item(id: $id) {
-    title
-    owner {
-      ...OwnerCard # 👇 the fields of OwnerCard are inserted here
+```json
+{
+  "data": {
+    "item": {
+      "title": "Cordless drill",
+      "owner": { "name": "Mira" },
+      "reviews": [
+        { "rating": 5, "text": "Strong battery" },
+        { "rating": 4, "text": "A bit heavy" }
+      ]
     }
   }
 }
 ```
 
-**A mutation** changes data. It looks like a query and returns the fields you ask for after the change.
+</td>
+</tr>
+</table>
 
-```graphql
-mutation ReserveItem($itemId: ID!, $from: Date!, $to: Date!) {
-  reserveItem(itemId: $itemId, from: $from, to: $to) {
-    id
-    status
-  }
-}
+**Sending it.** Every operation goes to the same URL, usually as a `POST` with the query text and its variables:
+
+```ts
+const response = await fetch("/graphql", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ query: itemPageQuery, variables: { id: "42" } }),
+});
+const { data, errors } = await response.json(); // 👇 check errors yourself
 ```
 
-**One endpoint.** A GraphQL server usually serves every operation from a single URL such as `/graphql`. Queries can be sent with `GET`; mutations must be sent with `POST`. Most clients send everything as `POST` by default, with a JSON body that contains the query text and the variables.
-
-**`errors` next to `data`.** If one field fails, GraphQL still returns the fields that worked. The failed field is `null` in `data`, and an entry in `errors` says what went wrong and where (`path`). This is called a partial response. Because HTTP has no status code for "partial success", the server answers with a `2xx` status, in practice `200`.
+**Partial responses.** If the Reviews service fails, you still get the rest. The failed field is `null`, an entry in `errors` says where it failed, and the HTTP status is still `200`:
 
 ```json
 {
-  "data": {
-    "item": { "title": "Cordless drill", "owner": { "name": "Mira" }, "reviews": null }
-  },
-  "errors": [{ "message": "Reviews service unavailable", "path": ["item", "reviews"] }]
+  "data": { "item": { "title": "Cordless drill", "owner": { "name": "Mira" }, "reviews": null } },
+  "errors": [{ "message": "Reviews unavailable", "path": ["item", "reviews"] }]
 }
 ```
 
-Your `fetch` sees `response.ok === true` here. You have to look at `errors` yourself.
+Two more terms. On the server, each field has a function that produces its value, a **resolver**: the resolver for `Item.owner` calls the Users service. And writes are **mutations**, such as `reserveItem(...)`. They look like queries and return the fields you ask for after the change.
 
 Docs: [Queries](https://graphql.org/learn/queries/), [Schemas and types](https://graphql.org/learn/schema/), [Mutations](https://graphql.org/learn/mutations/), [Response](https://graphql.org/learn/response/), [Serving over HTTP](https://graphql.org/learn/serving-over-http/)
 
-## The problems GraphQL addresses
+<details>
+<summary>Going further: one graph, many teams (federation)</summary>
 
-### Over- and under-fetching
+Few large sites start with GraphQL. A common path has three stages:
 
-A REST endpoint returns a fixed shape. `GET /users/7` returns the whole user: name, avatar, email, address, preferences. The owner card on the item page needs two of those fields. That is **over-fetching**: you download, parse and maybe serialise data nobody looks at. On a phone on a train, those bytes cost time.
+1. **REST per team.** Each team runs its own service. Every page orchestrates its own calls.
+2. **A GraphQL BFF.** One team builds a Backend for Frontend: a GraphQL server whose resolvers call the REST services. It helps, but every new field needs that one team, so it becomes a bottleneck.
+3. **A federated graph.** Each team runs a **subgraph**: a GraphQL service with its own part of the schema. A **gateway** (also called router) composes all subgraphs into one schema and splits each query among them.
 
-The opposite also happens. `GET /items/42` returns `ownerId: 7` but not the owner's name. You need a second request. That is **under-fetching**.
-
-With GraphQL, the client lists the fields it wants. The server returns those and nothing else.
-
-### Request waterfalls
-
-Let's load the item page from three REST endpoints. A first version usually looks like this:
-
-```ts
-const item = await getJson<Item>(`/items/${id}`);
-const owner = await getJson<User>(`/users/${item.ownerId}`); // 👇 needs item first
-const reviews = await getJson<Review[]>(`/items/${id}/reviews`);
-```
-
-Each `await` waits for a full round trip before the next request starts. That chain is a **waterfall**.
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant API as REST services
-    B->>API: GET /items/42
-    API-->>B: item (with ownerId)
-    B->>API: GET /users/7
-    API-->>B: whole user
-    B->>API: GET /items/42/reviews
-    API-->>B: all reviews
-```
-
-You can move the reviews request into a `Promise.all` with the item request, but the owner still waits for the item, because you need `ownerId` first. The best you get is two round trips, and the more related data a page shows, the longer that chain grows.
-
-With GraphQL, the browser sends one query. The server resolves the item, then the owner and reviews, close to the data, where a round trip takes milliseconds instead of a mobile network's hundreds.
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant G as GraphQL server
-    participant S as Services
-    B->>G: query ItemPage (one request)
-    G->>S: item 42
-    S-->>G: item
-    par close to the data
-        G->>S: user 7
-    and
-        G->>S: reviews of item 42
-    end
-    S-->>G: user, reviews
-    G-->>B: exactly the fields asked for
-```
-
-The waterfall has not disappeared. It moved to the server, where it is cheaper and where one team can optimise it for every client.
-
-### Who decides the shape of the data
-
-With REST, the **server team** decides what each endpoint returns. When the item page needs a new field, the frontend team asks for it, waits, and the field then goes to every client of that endpoint.
-
-With GraphQL, the work splits differently:
-
-- the **server** decides what is *possible*: the types, fields and arguments in the schema;
-- the **client** decides what it *gets*: the fields in its query.
-
-A frontend team can build a new view from existing fields without asking anyone. A service team can add a field without affecting clients that do not ask for it.
-
-### Versioning
-
-With REST, a fixed response shape means almost any change can break someone: renaming a field, changing its type, sometimes even adding one. The usual answer is a new version, `/v2/items`, and running both for a while.
-
-GraphQL avoids versions. The server only returns fields a client explicitly requested, so adding a type or a field breaks nobody. To remove a field, you mark it as deprecated first:
-
-```graphql
-type Item {
-  title: String!
-  name: String! @deprecated(reason: "Use `title`.")
-}
-```
-
-Tools and editors warn anyone who still uses `name`. The schema evolves continuously instead of in versions. [What GraphQL costs](#what-graphql-costs) shows the catch: you have to know when the last client stopped asking for `name`.
-
-Docs: [Schema design: versioning](https://graphql.org/learn/schema-design/), [Directives: `@deprecated`](https://graphql.org/learn/schema/#directives)
-
-## A typical evolution at scale
-
-Few large sites start with GraphQL. Here is a common path, told as the Lending Desk's story.
-
-```mermaid
-flowchart LR
-    subgraph S1 ["1. REST per team"]
-        direction TB
-        F1[Frontend] --> R1[Catalogue REST]
-        F1 --> R2[Reviews REST]
-        F1 --> R3[Users REST]
-    end
-    subgraph S2 ["2. GraphQL BFF over REST"]
-        direction TB
-        F2[Frontend] --> B[GraphQL BFF]
-        B --> R4[Catalogue REST]
-        B --> R5[Reviews REST]
-        B --> R6[Users REST]
-    end
-    subgraph S3 ["3. Federated graph"]
-        direction TB
-        F3[Frontend] --> GW[Gateway]
-        GW --> G1[Catalogue subgraph]
-        GW --> G2[Reviews subgraph]
-        GW --> G3[Users subgraph]
-    end
-    S1 --> S2 --> S3
-```
-
-### Stage 1: REST services per team
-
-Each team builds and runs its own REST service. That is good for the teams: they deploy independently and own their data. It is harder for the frontend, which now talks to many services, each with its own URL conventions, error format and authentication details. Every page orchestrates its own calls, and the waterfalls from the previous section show up everywhere.
-
-### Stage 2: a GraphQL layer in front of REST
-
-To hide that complexity, a team builds a **Backend for Frontend (BFF)**: a server that exists to serve one frontend. Here the BFF is a GraphQL server. Its resolvers call the existing REST services. The frontend sends one query; the BFF fans out.
-
-This helps a lot, but the schema shows where it came from. It often mirrors the REST endpoints instead of the domain:
-
-```graphql
-type Query {
-  item(id: ID!): Item
-  # 👇 REST-style pagination and IDs passed around as arguments
-  reviewsForItem(itemId: ID!, offset: Int, limit: Int): [Review!]!
-  reservationsForUser(userId: ID!): [Reservation!]!
-}
-
-type Item {
-  id: ID!
-  title: String!
-  ownerId: ID! # an ID instead of a link to the User type
-}
-```
-
-Typical signs: `offset` and `limit` copied from query strings, `userId` arguments that the client has to fill in (although the server knows who is logged in), and `ownerId` fields instead of `owner: User!`. A graph-shaped design would read `item { owner { name } reviews(first: 3) { ... } }` and `viewer { reservations }`. Cleaning this up later means deprecating fields, which brings us to the costs below.
-
-The BFF has another limit: one team owns it, and every other team needs that team to expose their new fields. It becomes a bottleneck.
-
-### Stage 3: a federated graph
-
-**Federation** splits the graph back to the teams, without splitting it for the client. Each team runs a **subgraph**: a GraphQL service with its own part of the schema. A **gateway** (also called router) composes all subgraphs into one schema, the supergraph, and serves it at one endpoint. For each query, the gateway works out which subgraphs to ask and merges the results.
-
-The key idea is that one type can get its fields from many services. An `Item` is identified by its `id` (the **key**), and each subgraph contributes the fields it owns:
+The key idea is that several subgraphs contribute fields to the same type. `@key` says how to identify an item, so the gateway can take the `id` from the Catalogue subgraph and ask the Reviews subgraph for the reviews of that item.
 
 ```graphql
 # Catalogue subgraph
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
+
 type Item @key(fields: "id") {
   id: ID!
   title: String!
-  photos: [Photo!]!
 }
 
-# Availability subgraph
+# Reviews subgraph (with the same @link header)
 type Item @key(fields: "id") {
   id: ID!
-  isAvailable(from: Date!, to: Date!): Boolean!
-}
-
-# Reviews subgraph
-type Item @key(fields: "id") {
-  id: ID!
-  averageRating: Float
   reviews(first: Int!): [Review!]!
 }
 ```
 
+This is Apollo Federation 2 syntax. Without the `extend schema @link(...)` line, a subgraph is treated as Federation 1. Another implementation is ChilliCream's GraphQL Fusion. It implements the GraphQL Composite Schemas specification, which a GraphQL Foundation working group develops. That specification is still preliminary (Stage 0), and its repository is titled "GraphQL Federation specification".
+
+Federation needs real infrastructure: the gateway, a schema registry that checks every subgraph change against the others, and usually a team that runs both.
+
+Docs: [graphql.org: Federation](https://graphql.org/learn/federation/), [Apollo Federation: entities](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/entities/intro), [Apollo Federation: directives](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/reference/directives), [Fusion](https://chillicream.com/docs/fusion), [GraphQL Federation specification](https://github.com/graphql/graphql-federation-spec)
+
+</details>
+
+## Each component declares its own data
+
+One query per page solves the waterfall. But who writes it?
+
+- If **the page** writes it, it lists every field of every team. When the Reviews team wants the reviewer's avatar, they edit a file the page team owns. When a component stops using a field, nobody dares remove it, so the query only grows.
+- If **every component** fetches its own data, the teams are independent again, but we are back to many requests and waterfalls.
+
+The answer is **colocation**: each component declares its fields next to its code, as a **fragment**. A fragment is a named list of fields on one type, and `...Name` inserts it into a query. The page composes the fragments into one query.
+
 ```mermaid
-flowchart LR
-    B[Browser] -->|"one query: item { title isAvailable averageRating similarItems }"| GW[Gateway]
-    GW --> CAT["Catalogue subgraph<br/>(Catalogue team)<br/>title, photos"]
-    GW --> AV["Availability subgraph<br/>(Availability team)<br/>isAvailable"]
-    GW --> REV["Reviews subgraph<br/>(Reviews team)<br/>averageRating, reviews"]
-    GW --> REC["Recommendations subgraph<br/>(Recommendations team)<br/>similarItems"]
+flowchart TD
+    Q["ItemPage query<br/>page team"]
+    Q --> H["ItemHeader_item<br/>title, photos<br/>Catalogue team"]
+    Q --> O["OwnerCard_item<br/>owner name, avatar<br/>Users team"]
+    Q --> A["ReserveBox_item<br/>availability<br/>Reservations team"]
+    Q --> R["Reviews_item<br/>3 reviews<br/>Reviews team"]
 ```
 
-The client sees one `Item` type. It does not know or care that four teams serve it. Each team deploys its subgraph independently, and the gateway checks at composition time that the subgraphs fit together.
+Fragment names follow the pattern component, then prop: `OwnerCard_item` is what `OwnerCard` needs from its `item` prop. The owner card declares its fragment. A code generator, here GraphQL Codegen's client preset, reads the `graphql(...)` strings and generates TypeScript types for them.
 
-Two public implementations you will meet:
+```tsx
+import { graphql } from "./gql";
+import { type FragmentType, getFragmentData } from "./gql/fragment-masking";
 
-- **Apollo Federation** introduced the approach and its `@key` directive. The schema snippet above uses that syntax.
-- **GraphQL Fusion** from ChilliCream is a gateway built on the GraphQL Composite Schemas specification, an open standard that the GraphQL Foundation's working group develops so that gateways and subgraphs from different vendors work together.
+export const OwnerCardFragment = graphql(`
+  fragment OwnerCard_item on Item {
+    owner {
+      name
+      avatarUrl
+    }
+  }
+`);
 
-Federation needs real infrastructure: a gateway, a schema registry that checks every subgraph change against the others, and usually a team that runs both and helps the other teams design their parts.
-
-Docs: [Federation](https://graphql.org/learn/federation/), [Apollo Federation: entities](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/entities/intro), [Fusion](https://chillicream.com/docs/fusion)
-
-## Where REST still wins
-
-A company that runs a federated graph still has plenty of REST endpoints. That is not a migration left unfinished. In these cases REST is the better tool.
-
-**HTTP and CDN caching.** A `GET /items/42/photos` response with `Cache-Control: public, max-age=300` can be cached by the browser, by every proxy and by the CDN, with no code on your side. The URL is the cache key. GraphQL requests are usually `POST` to one URL, which those caches do not store. More on this in [What GraphQL costs](#what-graphql-costs).
-
-**File uploads.** The GraphQL specification has no file type. Uploading a photo through GraphQL needs a community extension (the multipart request spec) and extra protection against cross-site request forgery. Apollo's own guidance is to upload outside the GraphQL server: a mutation hands out a signed URL, and the browser sends the file there as a plain HTTP upload.
-
-**Endpoints whose job is a side effect on HTTP itself.** Logging in, logging out, switching the language or accepting cookies set or clear cookies and then often redirect. That is HTTP's job: `Set-Cookie` headers and `303` redirects. A route handler that does exactly that is clearer than a mutation whose return value nobody reads.
-
-**Fire-and-forget beacons.** Analytics events and error reports are often sent while the user leaves the page. With `keepalive: true`, the browser finishes the request even after the page is gone. The body is limited to 64 KiB, and you never read the response, so a GraphQL round trip adds nothing.
-
-```ts
-export function trackEvent(event: TrackingEvent): void {
-  fetch("/api/events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(event),
-    keepalive: true, // 👇 survives navigation and tab close
-  });
+export function OwnerCard(props: { item: FragmentType<typeof OwnerCardFragment> }) {
+  const item = getFragmentData(OwnerCardFragment, props.item); // 👇 only these fields
+  return <p>Lent by {item.owner.name}</p>;
 }
 ```
 
-**Third-party APIs and webhooks.** Payment providers, shipping companies and identity providers offer REST APIs and call your webhooks with REST requests. You adapt to them, not the other way round. Some of those calls are wrapped in a subgraph later; the webhook receiver stays a REST endpoint.
+The page spreads the fragments into its query and hands each component the item:
 
-**Small apps.** If one team owns the API and its only client, as in Project 2, most of the problems in this topic do not exist yet. A schema, a gateway and a code generator are overhead you do not need.
+```tsx
+import type { ItemPageQuery } from "./gql/graphql"; // generated result type
+// ...
 
-Docs: [MDN: `fetch` `keepalive`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#keepalive), [GraphQL multipart request spec](https://github.com/jaydenseric/graphql-multipart-request-spec), [Apollo: file upload best practices](https://www.apollographql.com/blog/file-upload-best-practices)
+export const itemPageDocument = graphql(`
+  query ItemPage($id: ID!) {
+    item(id: $id) {
+      title
+      ...OwnerCard_item
+      ...Reviews_item
+    }
+  }
+`);
 
-## What GraphQL costs
+export function ItemPage({ data }: { data: ItemPageQuery }) {
+  if (!data.item) return <NotFound />; // 👇 item is nullable in the schema
+  return (
+    <>
+      <h1>{data.item.title}</h1>
+      <OwnerCard item={data.item} />
+      <Reviews item={data.item} />
+    </>
+  );
+}
+```
 
-GraphQL moves complexity from the client to the server and to tooling. Here is where it lands.
+The fragment definitions travel in the same document as the query, so the page still sends one request.
 
-### No CDN cache by default
+**Data masking** keeps the teams apart: a component can read only the fields its own fragment declares. `ItemPage` can read `title`, but in TypeScript it cannot read `owner.name`, so no team can quietly depend on another team's fields, and removing a field from your fragment can only break your own component.
 
-A `POST` to `/graphql` is not cached by browsers or CDNs. For pages whose data is the same for everyone, such as a public item page, you lose the cheapest cache there is.
+<details>
+<summary>Going further: Relay and the Codegen setup</summary>
 
-You can get some of it back. Queries may be sent with `GET`, which caches can store. Long queries do not fit into URL length limits, so the client sends a short hash of the query instead of its text, a **persisted query**. `GET /graphql?documentId=<hash>&variables=...` is a URL a CDN can cache (parameter names differ between tools). The server still has to send `Cache-Control` headers, and a response that mixes public item data with the logged-in user's data cannot be cached publicly.
+**Relay**, Meta's GraphQL client for React, introduced this model. Its compiler expects fragment names that start with the module name, generates the types, and masks the data at runtime too, not only in TypeScript. A component reads its fragment with the `useFragment` hook. Relay's ESLint plugin has a rule, `relay/unused-fields`, that reports fields a module requests but never reads.
 
-### Persisted operations couple deploys together
-
-**Persisted operations** (also called **trusted documents**) take the idea one step further. At build time, the client's tooling extracts every operation the app contains and registers it with the server. In production, the server accepts only registered operations. Anything else is rejected.
-
-This turns the list of operations into an **allow-list**. An attacker cannot send an expensive query you never wrote. The cost is coupling: each frontend deploy must register its operations **before** the new code reaches users, or its requests fail. And the server must keep the operations of old versions registered as long as old clients may still send them.
-
-Automatic persisted queries (APQ), where the client registers unknown hashes at runtime, save bandwidth but are not a security feature.
-
-### Schema evolution never ends
-
-"Deprecate instead of breaking" is the rule, and it is cheap to say. Removing a deprecated field is safe only when no client asks for it any more. On a large site, old clients live longer than you think:
-
-- tabs that stay open for days and keep running yesterday's JavaScript;
-- cached or statically generated pages that reference an old bundle;
-- mobile apps that users do not update;
-- bots and scrapers that replay old requests.
-
-So teams measure field usage in production and remove a field only once the numbers show no client is still asking for it. Some fields stay deprecated for months.
-
-### Checking the client against the production schema
-
-The Relay compiler and GraphQL Codegen check your operations against a schema file at build time. That check is only as good as the file. If your local schema is newer than production, your code may use a field that is not deployed yet.
-
-Large teams therefore check twice in CI:
-
-- the **client** against the schema that is in production now, for example with `graphql-inspector validate`, which also reports use of deprecated fields;
-- every **schema change** against the operations that active client versions send, which a schema registry can do.
-
-### Partial errors
-
-`200 OK` no longer means "it worked". Every client has to decide, field by field, what a `null` plus an `errors` entry means: hide the reviews section, show a fallback, or fail the page. Monitoring that counts HTTP status codes sees none of it, so you need to log GraphQL errors separately.
-
-### Query cost and N+1 on the server
-
-A client can now write queries that are expensive to run. `items(first: 100) { reviews(first: 100) { author { ... } } }` is one small request and up to ten thousand lookups. Servers protect themselves with pagination limits, depth limits and cost analysis, and persisted operations help because only known queries run.
-
-Inside a single query there is a second trap: the **N+1 problem**. A list of 20 reviews, each with an `author` field, runs the `author` resolver 20 times. Done naively, that is one request for the list plus 20 requests for the authors. The usual fix is **DataLoader**: it collects all keys requested in the same tick and calls your batch function once.
+**GraphQL Codegen's client preset** works with any client (Apollo Client, urql or plain `fetch`) and has fragment masking on by default. Its unmask function is called `useFragment`, but it is not a React hook; the docs recommend renaming it to avoid lint issues:
 
 ```ts
-import DataLoader from "dataloader";
+// codegen.ts
+import type { CodegenConfig } from "@graphql-codegen/cli";
 
-// Create one loader per request, so the cache never leaks between users.
+const config: CodegenConfig = {
+  schema: "./schema.graphql",
+  documents: ["src/**/*.tsx"],
+  generates: {
+    "./src/gql/": {
+      preset: "client",
+      presetConfig: { fragmentMasking: { unmaskFunctionName: "getFragmentData" } },
+    },
+  },
+};
+```
+
+Docs: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), [Relay: fragments](https://relay.dev/docs/guided-tour/rendering/fragments/), [eslint-plugin-relay](https://github.com/relayjs/eslint-plugin-relay), [Codegen client preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
+
+</details>
+
+## What GraphQL costs, and where REST still wins
+
+GraphQL moves work from the client to the server and to tooling. Here is where it lands.
+
+| Concern | REST | GraphQL |
+| --- | --- | --- |
+| **Caching** | The URL is the cache key. A `GET` with `Cache-Control` is cached by the browser and the CDN with no extra code. | Usually a `POST` to one URL, which browsers and CDNs do not cache. You can get some of it back with `GET` and persisted queries. |
+| **File uploads** | A `multipart/form-data` request to a route. | The spec has no file type. Apollo advises against multipart uploads through GraphQL and recommends signed upload URLs. |
+| **HTTP jobs** | Login sets a cookie and redirects, a beacon survives page close: HTTP does that. | A mutation whose return value nobody reads. |
+| **Errors** | One status code per request. | `200` with an `errors` list. You check it yourself, and monitoring that counts status codes misses it. |
+| **Authorization** | Checked once per route. | A query can reach any field, so every field needs protection. Put the checks in the business logic the resolvers call. |
+| **Expensive queries** | You know every request in advance. | Clients write their own queries. One small query can mean thousands of lookups, so servers limit depth and cost. |
+| **Changing the API** | Breaking changes usually get a new version, `/v2`. | Add fields freely, mark old ones `@deprecated`, and remove them only once no client asks for them. |
+| **Tooling** | `fetch` and Express. | Schema, server, code generator, generated types, schema checks in CI, and a gateway once several teams contribute. |
+| **Simplicity** | One team, one app, done. | Overhead you do not need yet. |
+
+<details>
+<summary>Going further: caching with persisted queries and trusted documents</summary>
+
+Queries may be sent with `GET`, which caches can store. Long queries do not fit into URL length limits, so the client sends a short identifier instead of the query text, a **persisted query**: `GET /graphql?documentId=<hash>&variables=...` (parameter names differ between tools). The server still has to send `Cache-Control`, and a response that mixes public item data with the logged-in user's data cannot be cached publicly.
+
+**Trusted documents** (also called persisted operations) go further. At build time, the tooling extracts every operation from the app and registers it with the server, which then runs only registered operations. That is an allow-list: nobody can send an expensive query you never wrote. The cost is coupling: each frontend deploy must register its operations before the new code reaches users, and old operations must stay registered while old clients still send them. Automatic persisted queries (APQ), where the client registers unknown hashes at runtime, save bandwidth but are not a security feature.
+
+Docs: [Serving over HTTP](https://graphql.org/learn/serving-over-http/), [Benjie Gillam: Trusted documents](https://benjie.dev/graphql/trusted-documents), [Relay: persisted queries](https://relay.dev/docs/guides/persisted-queries/)
+
+</details>
+
+<details>
+<summary>Going further: the N+1 problem and DataLoader</summary>
+
+A list of 20 reviews, each with an `author` field, runs the `author` resolver 20 times: one request for the list plus 20 for the authors. **DataLoader** collects the keys requested while the query runs and calls your batch function once.
+
+```ts
+// one loader per request, so cached users never leak between requests
 export function createLoaders(usersApi: UsersApi) {
   return {
     user: new DataLoader<string, User>(async (ids) => {
@@ -411,48 +359,75 @@ export function createLoaders(usersApi: UsersApi) {
   };
 }
 
-// In the resolver for Review.author:
+// resolver for Review.author:
 // author: (review, _args, context) => context.loaders.user.load(review.authorId)
 ```
 
 The batch function must return one result per key, in the same order as the keys.
 
-### Tooling complexity
+Docs: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataLoader](https://github.com/graphql/dataloader)
 
-A GraphQL frontend at scale usually involves a schema registry, a gateway, a compiler or code generator, generated types, an operation registry, lint rules and schema checks in CI. Each piece solves a real problem, and each needs someone who understands it. Count that cost before you start.
+</details>
 
-Docs: [Performance](https://graphql.org/learn/performance/), [Serving over HTTP: GET and persisted documents](https://graphql.org/learn/serving-over-http/), [Trusted documents](https://benjie.dev/graphql/trusted-documents), [Relay: persisted queries](https://relay.dev/docs/guides/persisted-queries/), [GraphQL Inspector: validate](https://the-guild.dev/graphql/inspector/docs/commands/validate), [DataLoader](https://github.com/graphql/dataloader)
+<details>
+<summary>Going further: changing a schema without versions</summary>
+
+The server returns only fields a client asked for, so adding a field breaks nobody. Adding an **enum value** is different: graphql.org lists it as a dangerous change, because clients with `switch` statements or exhaustive matching may not handle the new value.
+
+To remove a field, deprecate it first. Tools warn everyone who still uses it:
+
+```graphql
+type Item {
+  title: String!
+  name: String! @deprecated(reason: "Use `title`.")
+}
+```
+
+Removing it is safe only when no client sends it any more. On a large site, old clients live long: tabs that stay open for days, cached pages that reference an old bundle, mobile apps nobody updates. So teams measure field usage in production and remove a field once usage reaches zero.
+
+Docs: [graphql.org: Governance and versioning](https://graphql.org/learn/governance-versioning/)
+
+</details>
+
+Docs: [Best practices](https://graphql.org/learn/best-practices/), [Authorization](https://graphql.org/learn/authorization/), [Security](https://graphql.org/learn/security/), [Apollo: file upload best practices](https://www.apollographql.com/blog/file-upload-best-practices), [MDN: `fetch` `keepalive`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#keepalive)
 
 ## When to use which
 
-| Situation | REST | GraphQL | Both |
-| --- | --- | --- | --- |
-| One team, one app, a handful of resources (Project 2) | ✓ | | |
-| Public data that should be cached by a CDN | ✓ | possible with persisted `GET` queries | |
-| File uploads, cookies, redirects, beacons | ✓ | | |
-| Webhooks and third-party integrations | ✓ | | |
-| A page that combines data from several services | | ✓ | |
-| Many clients (web, apps) that need different fields of the same data | | ✓ | |
-| Many teams contributing to one product | | ✓ (federated) | |
-| A large site with all of the above | | | ✓ GraphQL for page data, REST for the HTTP-shaped jobs |
+| Situation | Use |
+| --- | --- |
+| One team, one app, a handful of resources (Project 2) | REST |
+| Public data that a CDN should cache | REST |
+| File uploads, cookies, redirects, beacons | REST |
+| Webhooks and third-party integrations | REST |
+| A page that combines data from several services | GraphQL |
+| Several clients (web, apps) that need different fields of the same data | GraphQL |
+| Many teams building parts of the same page | GraphQL with fragments |
+| A large site with all of the above | Both |
 
-A useful rule of thumb: use GraphQL for **reading and changing domain data** that pages compose, and keep REST for everything that is really about **HTTP**: caching by URL, files, cookies, redirects and requests that outlive the page.
+A large Lending Desk ends up like this:
+
+```mermaid
+flowchart LR
+    B["Browser"] -->|"page data"| G["GraphQL server"]
+    G --> S["Catalogue, Users, Reviews, ..."]
+    B -->|"login, uploads, events"| R["REST routes"]
+    P["Payment provider"] -->|"webhook"| R
+```
+
+A useful rule of thumb: use GraphQL for the **domain data** that pages read and change, and keep REST for everything that is really about **HTTP**: caching by URL, files, cookies, redirects and requests that outlive the page.
 
 ## Takeaways
 
-- GraphQL addresses problems that appear with many services and many teams: over-fetching, under-fetching, waterfalls, unclear ownership of data shapes, and versioning.
-- The usual path is REST per team, then a GraphQL BFF over REST, then a federated graph where each team owns the fields it serves.
-- REST stays the better tool for CDN caching, uploads, cookies, beacons, webhooks and small apps.
-- GraphQL's costs are real: no CDN cache by default, deploys coupled to registered operations, slow schema evolution, partial errors and server-side cost control.
+- GraphQL lets a page fetch exactly the fields it needs from many services in one request. The waterfall moves to the server, close to the data.
+- Fragments let each component declare its own fields. The page composes them into one query, and data masking keeps the teams independent.
+- GraphQL costs what REST gives you for free: CDN caching, simple uploads, status-code errors, per-route authorization and little tooling.
 - Decide per use case, not per company. Most large sites run both.
 
 ## Further reading
 
-- [graphql.org: Learn](https://graphql.org/learn/), the official introduction, including the pages on performance, security and federation
+- [graphql.org: Learn](https://graphql.org/learn/), the official introduction, including performance, security and federation
 - [GraphQL over HTTP specification](https://http-spec.graphql.org/draft/), how requests and status codes work
+- [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), the reasoning behind colocation and data masking
+- [GraphQL Codegen: client preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
+- [graphql.org: Governance and versioning](https://graphql.org/learn/governance-versioning/)
 - [Apollo Federation documentation](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/federation)
-- [GraphQL Federation specification](https://github.com/graphql/graphql-federation-spec), the open standard behind GraphQL Fusion
-- [Benjie Gillam: Trusted documents](https://benjie.dev/graphql/trusted-documents)
-- [DataLoader on GitHub](https://github.com/graphql/dataloader)
-- [Hive: app deployments](https://the-guild.dev/graphql/hive/docs/schema-registry/app-deployments), registering operations per app version
-- Related topic: [Who loads which data? Colocation at scale](../data-per-component/README.md)

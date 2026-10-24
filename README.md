@@ -13,14 +13,10 @@ Most topics take a problem you know from Project 2 and show what it looks like i
 | [Lazy loading with React](./topics/lazy-loading/README.md) | ~45 min | Load what the user is about to see, avoid layout shifts with skeletons, and prefetch before the click. |
 | [Compound components with React](./topics/compound-components/README.md) | ~45 min | Split one big configuration object into parts you compose in JSX, like `<select>` and `<option>`. |
 | [Responsive images](./topics/responsive-images/README.md) | ~90 min | Density and width descriptors, `sizes`, `<picture>` and modern formats, and calculating `sizes` in a grid. |
-| [When only part of the data fails](./topics/partial-failures/README.md) | ~40 min | Sort data by impact, and build error boundaries that catch only the errors addressed to them. |
-| [When the network lets you down](./topics/network-failures/README.md) | ~30 min | Time budgets, retries only where they are safe, cancellation, and error responses you can read. |
-| [Logging in a large application](./topics/logging/README.md) | ~40 min | A logger with context, browser errors that reach a server, sampling and noise filters, and logs that leak data. |
-| [Debugging production](./topics/debugging-production/README.md) | ~30 min | Follow one error from the browser through every service, with one ID, readable stack traces and clear ownership. |
-| [GraphQL vs REST](./topics/graphql-vs-rest/README.md) | ~40 min | What GraphQL solves when many teams share a page, how sites move to one federated graph, and why REST stays. |
-| [Who loads which data?](./topics/data-per-component/README.md) | ~40 min | Colocated fragments and data masking, and loading what can wait without a waterfall. |
-| [Lists, filters and pagination](./topics/lists-and-pagination/README.md) | ~30 min | The URL as the single source of truth, offset vs cursor pagination, and a "load more" that feels instant. |
-| [Keeping data consistent in the browser](./topics/client-cache/README.md) | ~30 min | Query caches and normalised caches, optimistic UI and when not to use it, and sync across tabs. |
+| [When parts of the page fail](./topics/partial-failures/README.md) | ~40 min | Decide per piece of data what happens when it fails, one error boundary per section, and requests that fail predictably. |
+| [Logging and debugging in production](./topics/logging/README.md) | ~40 min | Structured logs from server and browser, tied together by one ID that the user sees as a support code. |
+| [GraphQL vs REST](./topics/graphql-vs-rest/README.md) | ~40 min | Ask for exactly the data a page needs, let each component declare its part, and know what that costs. |
+| [Lists, filters and pagination](./topics/lists-and-pagination/README.md) | ~30 min | The URL as the single source of truth, keeping the old list visible while loading, and offset vs cursor pagination. |
 
 ## Archive
 
