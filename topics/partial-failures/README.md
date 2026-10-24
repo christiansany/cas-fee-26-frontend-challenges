@@ -1,6 +1,6 @@
 # When parts of the page fail
 
-> A large page draws on many services, and on any given day one of them is slow or down. If one failure takes down the whole page, the page is only as reliable as its weakest service. We decide for every piece of data what happens when it fails, and give each section its own error boundary, so a failure costs one box, not the page. Then we make the network layer fail in a predictable way: a time budget per request, retries only where they are safe, and no outdated answers.
+> A large page draws on many services, and on any given day one of them is slow or down. If one failure takes down the whole page, the page is only as reliable as its weakest service. We decide for every piece of data what happens when it fails, and give each section its own error boundary, so a failure costs one box, not the page. Then we make requests fail in a predictable way: a time budget per request, and retries only where they are safe.
 
 **Duration:** about 40 minutes
 
@@ -20,13 +20,28 @@
 
 In Project 2 you wrap `fetch` in `try`/`catch` and show an error message when it fails. With one API behind your app, that is enough.
 
-Now imagine the Lending Desk has grown into a company-wide platform with millions of users. Item catalogue, availability, reservations, reviews and recommendations each run as their own service: a separate backend with its own team and its own deploys. The item page alone draws on about five of them.
+Now imagine the Lending Desk has grown into a company-wide platform with millions of users. Item catalogue, availability, reservations, reviews and recommendations each run as their own service, with its own team and deploys. The item page draws on about five of them, and on any given day one is slow or down. The goal of this topic: **when one piece of data fails, only the part of the page that needs it notices.**
 
-On any given day, one of them is slow or down while the others are fine. The goal of this topic: **when one piece of data fails, only the part of the page that needs it notices.** Two steps get you there: decide per piece of data what happens when it fails, and make every request fail in a predictable way.
+```mermaid
+flowchart LR
+  subgraph before["Before: availability fails"]
+    b1["Something went wrong"]
+  end
+  subgraph after["After: availability fails"]
+    a1["Cordless drill, photos, owner"]
+    a2["Availability can't be loaded. Retry"]
+    a3["Reviews"]
+    a4["Recommendations"]
+  end
+  before -- "one boundary per section" --> after
+
+  classDef failed fill:#fde2e1,stroke:#c0392b,color:#000
+  class b1,a2 failed
+```
 
 ## What a partial response looks like
 
-Large pages often load their data with GraphQL: the page sends one query that names the fields it needs, and a server collects them from the services. Here is a query for the item page:
+Large pages often load their data with GraphQL: one query names the fields the page needs, and a server collects them from the services:
 
 ```graphql
 query ItemPage {
@@ -38,7 +53,7 @@ query ItemPage {
 }
 ```
 
-When the availability service times out, the server still answers. It sets the failed field to `null`, adds an entry with the field's `path` to an `errors` list, and delivers the rest:
+When the availability service times out, the server still answers: `availability` is `null`, the failure is listed under `errors` with its `path`, and the rest arrives.
 
 ```json
 {
@@ -51,21 +66,17 @@ When the availability service times out, the server still answers. It sets the f
 }
 ```
 
-The HTTP status is still a success code, usually `200`, so `res.ok` is `true`. A REST backend that merges several services into one response has the same problem.
+The HTTP status is a 2xx, usually `200`, so `res.ok` is `true`. A REST endpoint that merges several services can follow the same pattern: return what it has, plus a list of what failed.
 
 ### `null` alone tells you nothing
 
-`rating: null` means "nobody has rated this drill yet", a normal state. `availability: null` means "the service failed". A component that only sees the value might show "Not available" for a drill that is free to borrow.
-
-It gets worse with fields the schema marks as never `null`. If such a field fails, the `null` moves up to the nearest parent that may be `null`. One failed `status` can turn the whole `availability` object into `null`.
-
-So whatever reads a value from a partial response must also check whether an error came with it.
+`rating: null` means "nobody has rated this drill yet". `availability: null` means "the service failed". A component that only sees the value might show "Not available" for a drill that is free to borrow. So whatever reads a value must also check whether an error came with it.
 
 Docs: [GraphQL spec, Handling Execution Errors](https://spec.graphql.org/September2025/#sec-Handling-Execution-Errors)
 
 ## Sort the data by impact
 
-Not every failure deserves the same reaction. Before you write any error handling, decide for every piece of data what happens when it is missing. Three levels are enough:
+Before you write any error handling, decide for every piece of data what happens when it is missing. Three levels are enough:
 
 - **Critical:** the page makes no sense without it. Show an error page.
 - **Important:** the user needs it, but can still do something. Show a message and a retry.
@@ -73,17 +84,10 @@ Not every failure deserves the same reaction. Before you write any error handlin
 
 ```mermaid
 flowchart LR
-  subgraph page["Lending Desk item page"]
-    direction TB
-    item["Name, photos, owner"]
-    avail["Availability, Reserve button"]
-    reviews["Reviews"]
-    recs["Recommendations"]
-  end
-  item -- "fails" --> c["Critical: error page"]
-  avail -- "fails" --> i["Important: message and retry"]
-  reviews -- "fails" --> o["Optional: section hidden"]
-  recs -- "fails" --> o
+  item["Name, photos, owner"] -- "fails" --> c["Critical: error page<br/>(keep this group small)"]
+  avail["Availability, Reserve button"] -- "fails" --> i["Important: message and retry"]
+  reviews["Reviews"] -- "fails" --> o["Optional: section hidden"]
+  recs["Recommendations"] -- "fails" --> o
 
   classDef critical fill:#fde2e1,stroke:#c0392b,color:#000
   classDef important fill:#fff4d6,stroke:#b7791f,color:#000
@@ -93,103 +97,63 @@ flowchart LR
   class reviews,recs,o optional
 ```
 
-This is a product decision. Ask the product owner: "If availability is down, can a user still do something useful here?" Write the answer down next to the component.
+This is a product decision. Ask the product owner: "If availability is down, can a user still do something useful here?"
 
-Two rules of thumb:
-
-- **Keep critical data small.** If everything is critical, one slow service takes down every page.
-- **"Not found" is not "failed".** A missing item is a 404 page. A failed catalogue service is an error page. Keep the two apart.
+"Not found" is not "failed": a missing item is a 404 page, a failed catalogue service is an error page. Keep the two apart.
 
 ## One error boundary per section
 
-An **error boundary** is a React component that catches errors thrown while rendering its children and shows a fallback instead. React only supports boundaries as class components, and the React docs suggest the small library `react-error-boundary` so you don't have to write the class yourself.
+An **error boundary** is a React component that catches errors thrown while rendering its children and shows a fallback instead. Error boundaries are still class components, so use the library `react-error-boundary` rather than writing one.
 
-Give every important and optional section its own boundary. The fallback follows from the level you chose:
+Each level from the diagram becomes a boundary. An error rises to the nearest boundary above it:
 
 ```tsx
 import { ErrorBoundary } from "react-error-boundary";
 
 export function ItemPage({ response }: { response: ItemPageResponse }) {
   return (
-    <>
-      <ItemHeader response={response} /> {/* critical: its errors reach the page boundary */}
-      <ErrorBoundary fallback={<AvailabilityUnknown />} onError={reportFallback}>
+    <ErrorBoundary fallback={<ErrorPage />} onError={logFallback}>
+      <ItemHeader response={response} /> {/* critical: reaches the page boundary */}
+      <ErrorBoundary fallback={<AvailabilityUnknown />} onError={logFallback}>
         <Availability response={response} />
       </ErrorBoundary>
       {/* 👇 optional: a null fallback hides the section */}
-      <ErrorBoundary fallback={null} onError={reportFallback}>
+      <ErrorBoundary fallback={null} onError={logFallback}>
         <Reviews response={response} />
       </ErrorBoundary>
-    </>
-  );
-}
-```
-
-An error rises to the nearest boundary above it. One more boundary around the page shows the error page:
-
-```mermaid
-flowchart TB
-  root["Page boundary: error page"] --> header["ItemHeader"]
-  root --> b1["Boundary: message and retry"] --> avail["Availability"]
-  root --> b2["Boundary: hidden"] --> reviews["Reviews"]
-  root --> b3["Boundary: hidden"] --> recs["Recommendations"]
-```
-
-Where you put a boundary decides what fails. Three things go wrong when many teams change a page:
-
-- **A missing boundary.** A team adds a recommendations carousel without one. Its error rises to the page boundary, and an optional section replaces the whole page. Make boundaries hard to forget, for example with a `Section` component that always includes one.
-- **Critical data inside a section.** A boundary catches everything below it. If the owner's name fails inside the availability section, the user sees "Availability can't be loaded" next to an item without an owner. Render critical data outside every section boundary.
-- **A silent fallback.** A hidden section looks fine to everyone, including you. Report every fallback with `onError`, so you notice when reviews disappear on 5% of page views.
-
-Boundaries catch rendering errors only, not errors in event handlers or in callbacks such as `setTimeout`. A failed click on "Reserve" needs its own `try`/`catch`. For a retry button, use `fallbackRender`: it receives a `resetErrorBoundary` function that renders the section again.
-
-Docs: [React: Catching rendering errors with an error boundary](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary) · [`react-error-boundary`](https://github.com/bvaughn/react-error-boundary)
-
-<details>
-<summary>Going further: boundaries that catch only their own errors</summary>
-
-Keeping critical data outside sections relies on discipline. With twenty teams on one page, an error still ends up in the wrong boundary sometimes. One fix is an addressed error: each section creates a unique token, passes it to the components that may fail, and its boundary handles only errors that carry that token. Anything else it throws again, and an error thrown by a boundary goes to the next boundary up.
-
-```tsx
-export class SectionError extends Error {
-  readonly token: object;
-  constructor(token: object, options?: ErrorOptions) {
-    super("Section failed", options);
-    this.token = token;
-  }
-}
-
-export function AvailabilitySection({ response }: SectionProps) {
-  const [token] = useState(() => ({})); // a unique object per mounted section
-  return (
-    <ErrorBoundary
-      fallbackRender={({ error }) => {
-        // 👇 not ours: pass it to the boundary above
-        if (!(error instanceof SectionError) || error.token !== token) throw error;
-        return <AvailabilityUnknown />;
-      }}
-    >
-      <Availability response={response} onError={token} />
     </ErrorBoundary>
   );
 }
 ```
 
-`Availability` throws `new SectionError(onError)`. Because `onError` is a required prop, its signature now shows that it can fail. For critical data, share the page boundary's token through context, so "fail the whole page" becomes a choice someone typed.
+`onError` runs for every caught error; `logFallback` sends it to your error monitoring. For a retry button, use `fallbackRender`: it receives `resetErrorBoundary`, which renders the section again.
 
-</details>
+A boundary's position decides how much of the page disappears. Two things go wrong when many teams change a page:
+
+- **A missing boundary.** A team adds a recommendations carousel without one. Its error reaches the page boundary, and an optional section takes down the page. A `Section` component that always includes a boundary makes it hard to forget.
+- **Critical data inside a section.** If the owner's name fails inside the availability section, the user sees "Availability can't be loaded" next to an item without an owner. Render critical data outside every section boundary.
+
+Docs: [React: Catching rendering errors with an error boundary](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary) · [`react-error-boundary`](https://github.com/bvaughn/react-error-boundary)
 
 ## From a failed field to a fallback
 
-The boundary only helps if the component notices the failure. With GraphQL, that means checking the `errors` list for the path the component reads:
+The boundary only helps if the component notices the failure. The page sends the query once and passes the `response` down. Each component checks `errors` for the path it reads:
 
 ```ts
-type GraphQLError = { message: string; path?: readonly (string | number)[] };
+type Path = readonly (string | number)[];
+type GraphQLError = { message: string; path?: Path };
 
-// true if the field at `path`, or anything inside it, failed
-export function failedAt(errors: readonly GraphQLError[] = [], path: readonly string[]): boolean {
-  return errors.some((error) => path.every((key, i) => error.path?.[i] === key));
+const startsWith = (path: Path, prefix: Path) => prefix.every((key, i) => path[i] === key);
+
+// true if a field failed at, above or below `path`
+export function failedAt(errors: readonly GraphQLError[] = [], path: Path): boolean {
+  return errors.some(
+    (error) => error.path !== undefined && (startsWith(error.path, path) || startsWith(path, error.path)),
+  );
 }
+
+failedAt(errors, ["item", "availability"]); // true for ["item"], ["item", "availability"] or ["item", "availability", "status"]
+failedAt(errors, ["item", "rating"]); // false if only availability failed
 ```
 
 Now each section reacts in the way its level asks for:
@@ -210,12 +174,30 @@ export function Reviews({ response }: { response: ItemPageResponse }) {
 
 Throw when someone higher up must decide what to show. Return early when the component can decide on its own.
 
+A boundary sees only errors thrown during render. A `fetch` that fails in `useEffect`, in a data library or in a click handler never reaches it unless you hand the error over: call `showBoundary` from `react-error-boundary`'s `useErrorBoundary`, or set `throwOnError: true` in TanStack Query.
+
+```tsx
+export function Recommendations({ itemId }: { itemId: string }) {
+  const { showBoundary } = useErrorBoundary();
+  const [items, setItems] = useState<Item[]>([]);
+  useEffect(() => {
+    getRecommendations(itemId).then(setItems).catch(showBoundary); // 👇 now the boundary sees it
+  }, [itemId, showBoundary]);
+  // ...
+}
+```
+
+<details>
+<summary>Going further: why <code>failedAt</code> looks above and below</summary>
+
+If a non-null field fails, `null` bubbles up to the nearest parent that allows it. A failed `status!` can turn the whole `availability` object into `null` while the error's `path` points to `status`, below the path you read. A failed `item` nulls everything inside it, with a `path` above yours. Checking only the exact path misses both.
+
+</details>
+
 <details>
 <summary>Going further: errors during server rendering</summary>
 
-Error boundaries don't run while the page is rendered on the server. If a component throws inside a `<Suspense>` boundary, React puts that Suspense fallback into the HTML and tries the component again in the browser, where your error boundary gets its chance. A throw outside every `<Suspense>` boundary leaves React with no HTML to send, and your server must answer with an error page.
-
-So for sections rendered on the server, prefer the early return: check for the error and render the fallback directly.
+Error boundaries don't run while the page is rendered on the server. If a component throws inside a `<Suspense>` boundary, React sends that Suspense fallback in the HTML and tries the component again in the browser, where your error boundary gets its chance. A throw outside every `<Suspense>` boundary leaves no HTML to send, and your server must answer with an error page. So for sections rendered on the server, prefer the early return.
 
 Docs: [React: Recovering from errors outside the shell](https://react.dev/reference/react-dom/server/renderToPipeableStream#recovering-from-errors-outside-the-shell)
 
@@ -224,27 +206,7 @@ Docs: [React: Recovering from errors outside the shell](https://react.dev/refere
 <details>
 <summary>Going further: Relay does the check for you</summary>
 
-Relay, the GraphQL client from Meta, builds the `failedAt` check into the query language and generates matching TypeScript types:
-
-```tsx
-const item = useFragment(
-  graphql`
-    fragment Availability_item on Item {
-      availability @catch {
-        status
-        nextFreeDate
-      }
-    }
-  `,
-  itemRef,
-);
-if (!item.availability.ok) return <AvailabilityUnknown />; // { ok: false, errors }
-```
-
-- `@catch` on a field delivers an error as a value, `{ ok: true, value }` or `{ ok: false, errors }`.
-- `@throwOnFieldError` on a fragment throws when the component reads a field that has an error, so the section's boundary catches it.
-
-Either way, a failed field never reaches your code as an innocent `null`.
+In Relay, Meta's GraphQL client, `@catch` on a field delivers an error as a value (`{ ok: false, errors }`), and `@throwOnFieldError` on a fragment throws to the nearest boundary when a component reads a failed field.
 
 Docs: [Relay `@catch`](https://relay.dev/docs/guides/catch-directive/) · [Relay `@throwOnFieldError`](https://relay.dev/docs/guides/throw-on-field-error-directive/)
 
@@ -254,20 +216,21 @@ Docs: [Relay `@catch`](https://relay.dev/docs/guides/catch-directive/) · [Relay
 
 The boundary decides _whether_ the user sees a fallback. Design decides _what_ they see.
 
-- **Hide optional sections.** Reviews that disappear are better than an error box nobody can act on.
-- **Say what is unknown.** "Availability can't be loaded right now", not "Not available". The second sentence is false.
+- **Hide optional sections.** Missing reviews beat an error box nobody can act on.
+- **Say what is unknown.** "Availability can't be loaded right now", not "Not available", which is false.
 - **Offer a retry for important data.** The cause is often temporary.
-- **Keep the space.** Give a placeholder the size of the content it replaces, so the "Reserve" button doesn't jump.
+- **Keep the space.** A placeholder the size of the content keeps the "Reserve" button from jumping.
+- **Report every fallback.** A hidden section looks fine to everyone, including you. The `onError` report shows when reviews disappear on 5% of page views.
 
-Test every fallback before users see it: make one service fail with your chaos panel and look at the page.
+Test every fallback: make one service fail with your chaos panel and look at the page.
 
 ## Make requests fail predictably
 
-A boundary can only show a fallback once a request has actually failed. A request that hangs for minutes, a careless retry, or an outdated answer breaks that plan. Three habits keep failures predictable.
+A fallback needs a failure. A request that hangs never fails, and a careless retry can book a drill twice.
 
 ### A time budget per request
 
-`fetch` has no timeout of its own. If a service never answers, the section shows a spinner for minutes. Give every request a budget:
+`fetch` has no timeout of its own. If a service never answers, the spinner turns for minutes. Give every request a budget:
 
 ```ts
 export async function getAvailability(itemId: string): Promise<Availability> {
@@ -279,29 +242,42 @@ export async function getAvailability(itemId: string): Promise<Availability> {
 }
 ```
 
-When the time is up, `fetch` rejects with an error named `TimeoutError`. Choose the budget by who is waiting. During server rendering the user stares at an empty tab, so allow about a second for an optional section, then render without it. In the browser, a spinner in one box is fine for several seconds.
+When the time is up, `fetch` rejects with a `TimeoutError`. During server rendering, give optional data about a second, then render without it. In the browser, a spinner in one box can wait several seconds.
 
 Docs: [`AbortSignal.timeout()`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static)
 
 ### Retry only safe reads
 
-Many failures are temporary: a service restarts, a connection drops. Trying a read again often works. A read is a request that changes nothing: a `GET`, or a GraphQL query, even when sent with `POST`. Classify the failure first:
+Many failures are temporary: a service restarts, a connection drops. A read changes nothing: a `GET`, or a GraphQL query, even when sent with `POST`. Trying a read again often works, for the right failures:
 
-| What happened                                     | Retry the read?                                                   |
-| ------------------------------------------------- | ----------------------------------------------------------------- |
-| `408`, `429`, `502`, `503`, `504`                 | Yes, after a pause, or after `Retry-After` if the server sends it |
-| `500`, or a network error (`TypeError`)           | At most once: it can also be a bug or an invalid request          |
-| `400`, `403`, `404`, `409`, `422`, `501`          | No: the same request gets the same answer                         |
-| `401`                                             | Refresh the login once, then stop                                 |
-| `AbortError` or `TimeoutError`                    | No: someone cancelled, or the budget is spent                     |
+| What happened                                 | Retry the read?                  |
+| --------------------------------------------- | -------------------------------- |
+| `408`, `429`, `502`, `503`, `504`             | Yes, after a growing pause       |
+| `500`, or a network error (`TypeError`)       | At most once: it may be a bug    |
+| Any other `4xx`, a timeout, a cancellation    | No: the answer won't change      |
 
-Wait longer after each attempt, for example 200, 400 and 800 ms, and wait a random part of that (jitter), so a thousand clients don't retry at the same moment. Stop after two or three attempts: if the browser, a middle server and the backend each try three times, one click causes 27 calls. TanStack Query, for example, retries failed queries by default, but not mutations.
+Wait longer each time. Add a random offset so a thousand clients don't retry at the same moment:
+
+```ts
+const RETRY = new Set([408, 429, 502, 503, 504]);
+
+export async function getWithRetry(url: string, attempts = 3): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(url, { signal: AbortSignal.timeout(3_000) });
+    if (!RETRY.has(res.status) || attempt === attempts) return res;
+    const pause = 200 * 2 ** (attempt - 1); // 200, then 400 ms
+    await new Promise((resolve) => setTimeout(resolve, pause * (0.5 + Math.random())));
+  }
+}
+```
+
+Stop after two or three attempts. If the browser, a middle server and the backend each try three times, one click becomes 27 calls.
 
 Docs: [`fetch()` exceptions](https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch#exceptions) · [`Retry-After`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Retry-After)
 
 ### Never blind-retry a write
 
-A write such as `POST /reservations` is different. The server can create the reservation, and then the connection drops before the answer arrives. The browser sees a network error and can't tell whether the write happened.
+A write such as `POST /reservations` is different. The server can create the reservation, and then the connection drops before the answer arrives. The browser can't tell whether the write happened.
 
 ```mermaid
 sequenceDiagram
@@ -309,12 +285,12 @@ sequenceDiagram
   participant R as Reservations service
   B->>R: POST /reservations
   Note over R: reservation created
-  R--xB: connection drops
+  R--x B: connection drops
   B->>R: POST /reservations (retry)
   Note over R: second reservation
 ```
 
-A blind retry gives the user two reservations for the same drill. Show an error instead, and let the user check their reservations.
+A blind retry gives the user two reservations for the same drill. Show an error instead, and let the user check their reservations. Data libraries agree: TanStack Query retries failed queries by default, but not mutations.
 
 <details>
 <summary>Going further: idempotency keys make writes safe to retry</summary>
@@ -330,55 +306,42 @@ await fetch("/api/reservations", {
 });
 ```
 
-`crypto.randomUUID()` works only on HTTPS or localhost. The `Idempotency-Key` header is an IETF draft, and many payment and booking APIs already use it.
+`crypto.randomUUID()` works only on HTTPS or localhost. The `Idempotency-Key` header is an IETF draft that many payment and booking APIs already use.
 
 Docs: [IETF draft: The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/) · [`crypto.randomUUID()`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID)
 
 </details>
 
-### Cancel outdated requests
+<details>
+<summary>Going further: cancel outdated requests</summary>
 
-The user types "dr", then "drill" into the search box. Each keystroke starts a request. If the request for "dr" is slow, its results arrive last and overwrite those for "drill":
-
-```mermaid
-sequenceDiagram
-  participant U as Search box
-  participant S as Search service
-  U->>S: q=dr
-  U->>S: q=drill
-  S-->>U: results for "drill"
-  S-->>U: results for "dr" (late)
-  Note over U: "dr" overwrites "drill"
-```
-
-Abort the previous request when the query changes, and ignore anything that arrives after the abort:
+The user types "dr", then "drill". If the request for "dr" is slow, its results arrive last and overwrite those for "drill". Abort the previous request when the query changes:
 
 ```tsx
 useEffect(() => {
   const controller = new AbortController();
   searchItems(query, controller.signal)
-    .then((items) => {
-      if (!controller.signal.aborted) setResults(items);
-    })
+    .then(setResults)
     .catch((error: unknown) => {
-      if (controller.signal.aborted) return; // 👇 cancelled on purpose: not an error
-      setError(error);
+      if (!controller.signal.aborted) setError(error); // 👇 a cancellation is not a failure
     });
-  return () => controller.abort(); // runs before the effect starts the next search
+  return () => controller.abort(); // runs before the next search starts
 }, [query]);
 ```
 
-To add a time budget, pass `AbortSignal.any([controller.signal, AbortSignal.timeout(3_000)])`. Keep `AbortError` out of your error reports: a cancellation is not a failure. Data libraries such as TanStack Query handle outdated answers for you.
+Keep `AbortError` out of your error reports. Data libraries such as TanStack Query discard outdated answers for you.
 
-Docs: [`useEffect`: fetching data](https://react.dev/reference/react/useEffect#fetching-data-with-effects) · [`AbortSignal.any()`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/any_static)
+Docs: [`useEffect`: fetching data](https://react.dev/reference/react/useEffect#fetching-data-with-effects) · [`AbortController`](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)
+
+</details>
 
 ## Takeaways
 
-- On a large page, some data fails every day. Partial responses deliver data and errors together, usually with status `200`, and a `null` alone doesn't tell you which one you have.
-- Sort every piece of data as critical, important or optional, and decide the reaction before you write the code.
+- A partial response delivers data and errors together with a success status. A `null` alone doesn't tell you which one you have.
+- Sort every piece of data as critical, important or optional before you write the code.
 - Give every important and optional section its own error boundary, keep critical data outside them, and report every fallback.
+- A boundary only sees errors thrown during render. Hand it errors from effects and data libraries.
 - Give every request a time budget, retry only safe reads, and never blind-retry a write.
-- Cancel outdated requests, and don't report a cancellation as an error.
 
 ## Further reading
 

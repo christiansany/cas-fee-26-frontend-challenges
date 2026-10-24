@@ -1,6 +1,6 @@
 # Logging and debugging in production
 
-> In Project 2 you read errors in your own console. In production, the error happens in a stranger's browser or on one of hundreds of servers, and all you hear is "it broke on Tuesday". Let's send structured logs with context from the server and the browser, and tie them all to one ID that the user sees as a support code. Then one support request leads straight to the log lines that explain it.
+> In Project 2 you read errors in your own console. In production, the error happens in a stranger's browser or on one of hundreds of servers, and all you hear is "it broke on Tuesday". Let's give every request one ID, put it on every log line and show it to the user as a support code. Then one support request leads straight to the log lines that explain it.
 
 **Duration:** about 40 minutes
 
@@ -18,9 +18,9 @@
 
 ## Where you are coming from
 
-In Project 2 you write `console.log`, open DevTools or the terminal, and read the output. There is one developer, one browser and one server, and the output is right in front of you.
+In Project 2 you write `console.log`, open DevTools or the terminal, and read the output. There is one developer, one browser and one Express server.
 
-Now imagine the Lending Desk, the equipment lending service you know from an earlier evening, has grown into a company-wide platform: item catalogue, availability, reservations, reviews and notifications, each owned by its own team and service, with millions of users. A reservation fails, and three things break:
+Now imagine the Lending Desk, the equipment lending service from an earlier evening, has grown into a company-wide platform: item catalogue, availability, reservations, reviews and notifications, each owned by its own team and service, with millions of users. Your Express server is now the **frontend server**: it serves the page and calls the other services. A reservation fails, and three things break:
 
 - **Browser output vanishes.** A `console.log` in production writes to the console of a user you will never meet.
 - **Server output is unsearchable.** Hundreds of server instances print free text. Nobody can find "all failed reservations in the last hour" in that.
@@ -28,7 +28,9 @@ Now imagine the Lending Desk, the equipment lending service you know from an ear
 
 ## One ID from click to cause
 
-Here is the core idea of this topic: **send structured logs with context from the server and the browser, and tie every line to one ID that the user can also see.** Then one report leads to the cause.
+Here is the core idea of this topic: **give every request one ID, put it on every log line and show it to the user.** Then one support request finds the cause.
+
+The lines go to a **log platform**: a service that stores the log lines of all servers and browsers and lets you search them in one place.
 
 The diagram shows the whole chain. `R` stands for one request ID, for example `7c1e9a2b-5d3f-4e8a-9b1c-2f6d8e0a4b37`.
 
@@ -36,26 +38,19 @@ The diagram shows the whole chain. `R` stands for one request ID, for example `7
 sequenceDiagram
   actor U as User
   participant B as Browser
-  participant F as Frontend server
-  participant S as Reservations service
+  participant S as Frontend server
   participant L as Log platform
-  actor Sup as Support
   U->>B: Click Reserve
-  B->>F: POST /api/items/item_812/reservations
-  Note over F: create request ID R
-  F->>S: POST /reservations (x-request-id R)
-  S-->>L: error line, requestId R
-  S-->>F: 500
-  F-->>L: error line, requestId R
-  F-->>B: 500 (x-request-id R)
-  B-->>L: error line, requestId R
-  B->>U: Error message with code R
-  U->>Sup: It broke, code R
-  Sup->>L: search R
-  L-->>Sup: lines from 3 places
+  B->>S: POST /api/items/item_812/reservations
+  Note over S: create request ID R
+  S-->>L: error line with R
+  S-->>B: 500, header x-request-id R
+  B-->>L: error line with R
+  B->>U: error message with code R
+  Note over U,L: The user sends R to support. Support searches for R and finds every line.
 ```
 
-The ID travels in an HTTP header. `x-request-id` is a common name for it, not a standard. Each section below builds one piece: the log line, the context on the server, the browser errors, and the code the user sees.
+The ID travels in an HTTP header. `x-request-id` is a common name for it, not a standard. The sections below build the chain piece by piece.
 
 ## Structured log lines
 
@@ -80,77 +75,103 @@ console.log("Reservation " + id + " failed for item " + itemId);
 logger.error("Reservation failed", { reservationId: id, itemId });
 ```
 
+Here are both lines as they arrive in the log:
+
+```text
+Reservation res_4410 failed for item item_812
+{"level":"error","message":"Reservation failed","reservationId":"res_4410","itemId":"item_812"}
+```
+
+In the second line, "all failed reservations for `item_812`" is one filter.
+
 ### From the code to the log platform
 
-In development you want readable output in the terminal. In production you want one JSON object per line on standard output (stdout). A **log agent** is a program that runs next to your server, reads stdout and forwards each line to a **log platform**, where you search all lines of all servers in one place. Fluent Bit and the OpenTelemetry Collector are agents; Grafana Loki and Datadog are platforms. Your server does not need to know which one you use.
+In development, print readable lines to the terminal. In production, print each line as JSON to standard output (stdout), the stream `console.log` also writes to. A **log agent** collects that output and sends it to the log platform. Fluent Bit is a common agent, Grafana Loki a common platform.
 
 ```mermaid
 flowchart LR
-  code["logger.error()"] --> env{"Environment"}
-  env -->|development| pretty["Readable console"]
-  env -->|production| stdout["JSON line on stdout"]
-  stdout --> agent["Log agent"] --> platform["Log platform"]
-  browser["Browser logger"] -->|"POST /api/logs"| endpoint["Log endpoint"] --> stdout
+  browser["Browser logger"] -->|"POST /api/logs"| server["Frontend server logger"]
+  server -->|"JSON lines on stdout"| agent["Log agent"]
+  agent --> platform["Log platform"]
 ```
 
-Browser errors take the lower path. We build it later in this topic.
+We build the browser path later in this topic.
 
 ### A small logger
 
-Two details matter. `JSON.stringify` turns an `Error` into `{}`, because `name`, `message` and `stack` are not enumerable, so copy them out. And the logger must never throw: it runs inside `catch` blocks, and an exception there hides the original error.
+The logger adds the request context, removes sensitive fields and writes one line, the same in both branches.
 
 ```ts
 const isProduction = process.env.NODE_ENV === "production";
 
-const toJson = (value: unknown) =>
-  value instanceof Error ? { name: value.name, message: value.message, stack: value.stack } : value;
-
 function log(level: Level, message: string, fields: Fields = {}) {
-  try {
-    const context = requestContext.getStore(); // 👇 filled per request, see below
-    const line = { time: new Date().toISOString(), level, message, ...context, ...redact(fields) };
-    if (isProduction) {
-      process.stdout.write(JSON.stringify({ ...line, error: toJson(fields.error) }) + "\n");
-    } else {
-      console[level](`${level.toUpperCase()} ${message}`, fields);
-    }
-  } catch {
-    process.stdout.write(JSON.stringify({ level, message, logFailed: true }) + "\n");
+  const context = requestContext.getStore(); // filled per request, see the next section
+  // 👇 context and redacted fields go on every line
+  const line = { time: new Date().toISOString(), level, message, ...context, ...redact(fields) };
+  if (isProduction) {
+    process.stdout.write(JSON.stringify(line) + "\n");
+  } else {
+    console[level](`${level.toUpperCase()} ${message}`, line);
   }
 }
 
 export const logger = {
-  info: (message: string, fields?: Fields) => log("info", message, fields),
   error: (message: string, fields?: Fields) => log("error", message, fields),
-  // ... debug, warn
+  // ... debug, info, warn
 };
 ```
 
-`JSON.stringify` throws on circular objects and on `BigInt`. The `catch` block then writes a minimal line instead. `redact()` follows in [What never to log](#what-never-to-log).
+`redact()` removes passwords, tokens and similar fields; see [What never to log](#what-never-to-log). One trap: `JSON.stringify(error)` gives `{}`. Copy `name`, `message` and `stack` yourself, with a small `toJson()` helper.
+
+<details>
+<summary>Going further: a logger that never fails</summary>
+
+`toJson()` copies the error fields out, because they are not enumerable:
+
+```ts
+const toJson = (value: unknown) =>
+  value instanceof Error ? { name: value.name, message: value.message, stack: value.stack } : value;
+```
+
+Use it for the `error` field before `JSON.stringify`.
+
+The logger must also never throw. It runs inside `catch` blocks, and an exception there hides the original error. `JSON.stringify` throws on circular objects and on `BigInt`, so wrap the body of `log()` in `try`, and in the `catch` write a minimal line:
+
+```ts
+process.stdout.write(JSON.stringify({ level, message, logFailed: true }) + "\n");
+```
 
 Docs: [`JSON.stringify()` exceptions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#exceptions)
 
-A finished line in production looks like this:
-
-```json
-{
-  "time": "2026-10-28T18:42:07.109Z",
-  "level": "error",
-  "message": "Reservation failed",
-  "requestId": "7c1e9a2b-5d3f-4e8a-9b1c-2f6d8e0a4b37",
-  "path": "/api/items/item_812/reservations",
-  "release": "2026.10.28-3",
-  "loggedIn": true,
-  "itemId": "item_812",
-  "error": { "name": "ServiceError", "message": "Reservations service answered 500", "stack": "..." }
-}
-```
+</details>
 
 ## Context on every server line
 
-"Reservation failed" is only half useful. You also want the request ID, the path, the release that was running and whether the user was logged in. Passing that into every function would change every signature in the codebase.
+"Reservation failed" alone does not say which request failed. Every line also needs the request ID, the path, the **release** (the deployed version) and whether the user was logged in. Passing these into every function would change every signature.
 
-Node's `AsyncLocalStorage` stores a value that follows one request through `await`, timers and callbacks. You start it once per request with `run()`, and any code inside that request reads it with `getStore()`. This is the same middleware that creates the request ID and returns it in a response header:
+### Why a global variable fails
+
+A shared variable `currentRequestId` looks like the answer. But the server handles many requests at the same time. While request A waits for the database, request B starts and overwrites the variable:
+
+```mermaid
+sequenceDiagram
+  participant A as Request A
+  participant G as Global currentRequestId
+  participant B as Request B
+  A->>G: write A
+  Note over A: waits for the database
+  B->>G: write B
+  A->>G: read for the log line
+  G-->>A: B (wrong ID)
+```
+
+Request A now logs with the ID of request B.
+
+### One box per request
+
+Node's `AsyncLocalStorage` solves this. Think of it as a box that belongs to one request. You fill it once with `run()`, and any code in that request reads it with `getStore()`, also after `await` and in timers. Two requests at the same time each see their own box.
+
+The middleware creates the request ID, returns it in a response header and fills the box:
 
 ```ts
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -161,35 +182,45 @@ export const requestContext = new AsyncLocalStorage<RequestContext>();
 
 app.use((req, res, next) => {
   const requestId = randomUUID();
-  res.setHeader("x-request-id", requestId); // the browser can read it on every response
+  res.setHeader("x-request-id", requestId); // the browser reads it later
   const context = {
     requestId,
     path: req.path, // without the query string
     release: process.env.RELEASE ?? "dev",
     loggedIn: Boolean(req.session?.userId),
   };
-  // 👇 everything awaited inside next() sees this context
+  // 👇 everything inside next(), also after await, sees this context
   requestContext.run(context, next);
 });
 ```
 
-The server creates the ID itself. Accept an ID from an incoming request only from a server you trust, such as your own load balancer, and check its format: it ends up in every log line.
-
 Docs: [Node.js `AsyncLocalStorage`](https://nodejs.org/api/async_context.html#class-asynclocalstorage)
 
-### Pass it on, and log once at the end
+Now every line carries the context:
 
-Every call to another service sends the same ID along, so that service can put it on its own lines:
-
-```ts
-export function callService(url: string, init: RequestInit = {}) {
-  const headers = new Headers(init.headers);
-  headers.set("x-request-id", requestContext.getStore()?.requestId ?? "none");
-  return fetch(url, { ...init, headers });
+```json
+{
+  "time": "2026-10-28T18:42:07.109Z",
+  "level": "error",
+  "message": "Reservation failed",
+  "requestId": "7c1e9a2b-5d3f-4e8a-9b1c-2f6d8e0a4b37",
+  "path": "/api/items/item_812/reservations",
+  "release": "2026.10.28-3",
+  "loggedIn": true,
+  "itemId": "item_812"
 }
 ```
 
-Errors that no route handles reach one error-handling middleware, registered after all routes. Express 5 forwards rejected `async` handlers there automatically. It still runs inside the request context, so the line carries the request ID.
+### Pass the ID on
+
+Every call to another service sends the same ID in the `x-request-id` header, read with `requestContext.getStore()?.requestId`. That service puts it on its own lines, so one search finds them too.
+
+One last middleware catches every error a route did not handle. It still runs inside the request context, so its line carries the ID.
+
+<details>
+<summary>Going further: server errors and edge cases</summary>
+
+**The last middleware.** Register it after all routes. Express 5 forwards rejected `async` handlers to it automatically.
 
 ```ts
 app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
@@ -199,14 +230,7 @@ app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
 });
 ```
 
-Docs: [Express: Error handling](https://expressjs.com/en/guide/error-handling.html)
-
-<details>
-<summary>Going further: errors outside any request</summary>
-
-Errors that escape everything, such as a rejected promise nobody awaited, never reach the middleware. Node's guidance is clear: after an uncaught exception, "it is not safe to resume normal operation". Log it, let the process exit, and let an external supervisor (your container platform, for example) start a new one.
-
-The `uncaughtExceptionMonitor` event lets you log without changing that behaviour. With the default `--unhandled-rejections=throw` mode, unhandled rejections arrive there too, with `origin` set to `"unhandledRejection"`.
+**Errors outside any request.** A rejected promise nobody awaited never reaches the middleware. Node's guidance: after an uncaught exception, "it is not safe to resume normal operation". Log it, let the process exit, and let your container platform start a new one. The `uncaughtExceptionMonitor` event lets you log without changing that behaviour. With the default `--unhandled-rejections=throw` mode, unhandled rejections arrive there too.
 
 ```ts
 process.on("uncaughtExceptionMonitor", (error, origin) => {
@@ -214,9 +238,11 @@ process.on("uncaughtExceptionMonitor", (error, origin) => {
 });
 ```
 
-Avoid an `unhandledRejection` listener that only logs: it stops Node from treating the rejection as an uncaught exception, and the process runs on in an unknown state.
+**IDs from outside.** The middleware creates the ID itself. Accept an ID from an incoming request only from a server you trust, such as your own load balancer, and check its format: it ends up in every log line.
 
-Docs: [Node.js `uncaughtExceptionMonitor`](https://nodejs.org/api/process.html#event-uncaughtexceptionmonitor), [Warning: using `uncaughtException` correctly](https://nodejs.org/api/process.html#warning-using-uncaughtexception-correctly), [`--unhandled-rejections`](https://nodejs.org/api/cli.html#--unhandled-rejectionsmode)
+**Lost context.** Some callback-based APIs can lose the store. Node's docs suggest `util.promisify()` or `AsyncResource` for those.
+
+Docs: [Express: Error handling](https://expressjs.com/en/guide/error-handling.html), [Node.js `uncaughtExceptionMonitor`](https://nodejs.org/api/process.html#event-uncaughtexceptionmonitor), [Warning: using `uncaughtException` correctly](https://nodejs.org/api/process.html#warning-using-uncaughtexception-correctly), [Node.js: Troubleshooting context loss](https://nodejs.org/api/async_context.html#troubleshooting-context-loss)
 
 </details>
 
@@ -229,28 +255,23 @@ With about 30 services, each team inventing its own header does not scale. The W
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-Its four parts are the version, a 32-character **trace ID** shared by the whole request, a 16-character **parent ID** for the calling step, and flags (`01` means "sampled", the caller may record this trace). A **trace** is the record of one request across all services, made of **spans**, one per unit of work, each with a start and a duration.
+**OpenTelemetry** is the open standard and set of SDKs that create and pass on this header. It records a **trace** per request, made of **spans**, one per unit of work with a start and a duration. If every service uses it, the trace ID can serve as your request ID.
 
-**OpenTelemetry** is the open standard and set of SDKs that create and pass on this header, and record traces, metrics and logs. If every service uses it, the trace ID can serve as your request ID: put it on every log line and in the response header. You rarely write `traceparent` by hand; the SDK generates it. For the browser, the OpenTelemetry docs say that client instrumentation "is experimental and mostly unspecified".
-
-Docs: [W3C Trace Context](https://www.w3.org/TR/trace-context/), [OpenTelemetry: Context propagation](https://opentelemetry.io/docs/concepts/context-propagation/), [OpenTelemetry: Browser](https://opentelemetry.io/docs/languages/js/getting-started/browser/)
+Docs: [W3C Trace Context](https://www.w3.org/TR/trace-context/), [OpenTelemetry: Context propagation](https://opentelemetry.io/docs/concepts/context-propagation/)
 
 </details>
 
 ## Getting browser errors to a server
 
-The server is under your control. The browser is where most surprises happen, and by default every one of them stays in the user's console.
+The browser is where most surprises happen, and by default every one of them stays in the user's console.
 
 ### Where browser errors come from
 
-| Source                                   | Catches                                                | Note                                            |
-| ---------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| `error` event on `window`                | Uncaught exceptions                                    | `event.error` holds the thrown value            |
-| `unhandledrejection` event on `window`   | Rejected promises that nothing handles                 | `event.reason` can be any value, not an `Error` |
-| React root options (React 19)            | Errors in components, with the component stack         | Passed to `createRoot` or `hydrateRoot`         |
-| Your own code around `fetch`             | Failed API calls, with the request ID                  | See [Show the ID to the user](#show-the-id-to-the-user) |
-
-React has three root options: `onUncaughtError` (no error boundary caught it), `onCaughtError` (an error boundary caught it) and `onRecoverableError` (React recovered on its own, for example after a hydration mismatch).
+| Source                                 | Catches                                        |
+| -------------------------------------- | ---------------------------------------------- |
+| `error` event on `window`              | Uncaught exceptions                            |
+| `unhandledrejection` event on `window` | Rejected promises that nothing handles         |
+| React root options (React 19)          | Errors in components, with the component stack |
 
 ```tsx
 window.addEventListener("error", (event) => {
@@ -258,43 +279,22 @@ window.addEventListener("error", (event) => {
 });
 
 window.addEventListener("unhandledrejection", (event) => {
-  browserLogger.error("Unhandled rejection", { error: event.reason });
+  browserLogger.error("Unhandled rejection", { error: event.reason }); // reason can be any value
 });
 
 hydrateRoot(container, <App />, {
   onUncaughtError: (error, info) =>
     browserLogger.error("React error", { error, componentStack: info.componentStack }),
-  onCaughtError: (error, info) =>
-    browserLogger.error("React error caught", { error, componentStack: info.componentStack }),
-  // ... onRecoverableError, logged as warn
 });
 ```
 
+React also has `onCaughtError`, for errors an error boundary caught. If your boundaries already report their errors, leave it out, or each error is logged twice.
+
 Docs: [`Window: error` event](https://developer.mozilla.org/en-US/docs/Web/API/Window/error_event), [`Window: unhandledrejection` event](https://developer.mozilla.org/en-US/docs/Web/API/Window/unhandledrejection_event), [React `hydrateRoot` options](https://react.dev/reference/react-dom/client/hydrateRoot#parameters)
 
-### When to send
+### When and how to send
 
-One request per line is too expensive with millions of users. Collect lines in a queue and send them together every few seconds. The last batch matters most: it often holds the error that made the user leave. So send it the moment the page becomes hidden.
-
-```mermaid
-flowchart LR
-  visible["Visible"] -->|"switch app, new tab, navigate"| hidden["Hidden: send now"]
-  hidden -->|"user comes back"| visible
-  hidden -->|"tab closed or discarded"| gone["Gone: no more events"]
-```
-
-The `visibilitychange` event fires when the page becomes hidden. MDN calls it the most reliable moment to send data at the end of a session; it recommends against `unload`, `beforeunload` and `pagehide`.
-
-### How to send
-
-| Way to send                    | Survives leaving the page? | Body limit | Note                                                            |
-| ------------------------------ | -------------------------- | ---------- | --------------------------------------------------------------- |
-| `fetch()`                      | No, it is cancelled        | None       | Fine while the page stays open                                  |
-| `fetch()` with `keepalive`     | Yes                        | 64 KiB     | You set the `Content-Type` and can read the response            |
-| `navigator.sendBeacon()`       | Yes                        | 64 KiB     | POST only, no response; a string body arrives as `text/plain`   |
-| A request in an `unload` handler | Often never runs         | –          | Chrome 155 and later no longer fire `unload`; it also blocks the back/forward cache |
-
-`fetch` with `keepalive` works while the page is open and while it is leaving, so we use it for every batch. Send the `Content-Type: application/json` header: without it, a string body arrives as `text/plain`, and `express.json()` leaves `req.body` empty.
+One request per line is too expensive with millions of users. Collect lines in a queue instead. The newest lines matter most: they often hold the error that made the user leave. So when the queue is full, drop the oldest line:
 
 ```ts
 const queue: LogLine[] = [];
@@ -302,12 +302,17 @@ const queue: LogLine[] = [];
 export const browserLogger = {
   error: (message: string, fields: Fields = {}) => {
     const time = new Date().toISOString();
-    queue.push({ time, level: "error", message, page: location.pathname, ...fields, error: toJson(fields.error) });
-    if (queue.length > 200) queue.shift(); // never grow without limit
+    queue.push({ time, level: "error", message, ...fields, error: toJson(fields.error) });
+    // 👇 keep the newest 20 lines
+    if (queue.length > 20) queue.shift();
   },
   // ... warn, info
 };
+```
 
+Send the whole queue every few seconds, and at once when the page becomes hidden:
+
+```ts
 function flush() {
   if (queue.length === 0) return;
   fetch("/api/logs", {
@@ -315,7 +320,7 @@ function flush() {
     // 👇 finishes even after the page is gone
     keepalive: true,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(queue.splice(0, 20)),
+    body: JSON.stringify(queue.splice(0)), // all lines, the newest included
   }).catch(() => {}); // logging must never break the page
 }
 
@@ -325,11 +330,27 @@ document.addEventListener("visibilitychange", () => {
 });
 ```
 
-The `/api/logs` endpoint parses the batch, caps its size, and writes each line through the server logger with `source: "browser"`. Treat it as untrusted input: anyone can post to it.
+The `visibilitychange` event fires when the user switches tabs, switches apps or leaves the page. MDN calls it the most reliable moment to send data at the end of a session. A `keepalive` body is limited to 64 KiB, which is why the queue stays small.
 
-In a large platform, an error-tracking SDK often does this batching for you. The ideas stay the same.
+On the server, `/api/logs` writes each line through the server logger with `source: "browser"`. Treat it as untrusted input: anyone can post to it. Error-tracking SDKs often do this batching for you, with the same ideas.
 
-Docs: [`RequestInit.keepalive`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#keepalive), [`navigator.sendBeacon()`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon), [`Document: visibilitychange` event](https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event), [Chrome: `unload` deprecation](https://developer.chrome.com/blog/unload-deprecated-in-chrome)
+Docs: [`RequestInit.keepalive`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#keepalive), [`Document: visibilitychange` event](https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event)
+
+<details>
+<summary>Going further: other ways to send</summary>
+
+| Way to send                      | Survives leaving the page? | Body limit | Note                                                              |
+| -------------------------------- | -------------------------- | ---------- | ----------------------------------------------------------------- |
+| `fetch()`                        | No, it is cancelled        | None       | Fine while the page stays open                                    |
+| `fetch()` with `keepalive`       | Yes                        | 64 KiB     | You set the `Content-Type` and can read the response              |
+| `navigator.sendBeacon()`         | Yes                        | 64 KiB     | POST only, no response; a string body arrives as `text/plain`     |
+| A request in an `unload` handler | Often never runs           | –          | Chrome no longer fires `unload` by default since Chrome 155; it also blocks the back/forward cache |
+
+Send the `Content-Type: application/json` header with `fetch`. Without it, a string body arrives as `text/plain`, and `express.json()` leaves `req.body` empty.
+
+Docs: [`navigator.sendBeacon()`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon), [Chrome: `unload` deprecation](https://developer.chrome.com/blog/unload-deprecated-in-chrome)
+
+</details>
 
 <details>
 <summary>Going further: too many errors</summary>
@@ -352,47 +373,27 @@ Docs: [`<script>` `crossorigin`](https://developer.mozilla.org/en-US/docs/Web/HT
 
 ## Show the ID to the user
 
-The user still only sees "Something went wrong". Let's give them the ID. When a request fails, the browser reads the ID from the response header, puts it on its own log line, and shows the same value. If the request never reached a server, for example because the user is offline, the browser creates an ID itself.
+The user still only sees "Something went wrong". Let's give them the ID. When a request fails, the browser reads the ID from the response header, puts it on its own log line and shows the same value:
 
 ```ts
 export async function reserve(itemId: string): Promise<Reservation> {
-  let response: Response;
-  try {
-    response = await fetch(`/api/items/${itemId}/reservations`, { method: "POST" });
-  } catch (error) {
-    // 👇 no server answered, so no server ID
-    throw logFailure(crypto.randomUUID(), { itemId, error });
-  }
+  const response = await fetch(`/api/items/${itemId}/reservations`, { method: "POST" });
   if (!response.ok) {
     const requestId = response.headers.get("x-request-id") ?? crypto.randomUUID();
-    throw logFailure(requestId, { itemId, status: response.status });
+    // 👇 the log line and the user get the same ID
+    browserLogger.error("Reservation failed", { requestId, itemId, status: response.status });
+    throw new ReservationError(requestId);
   }
   return response.json();
 }
-
-function logFailure(requestId: string, fields: Fields): ReservationError {
-  // 👇 the log line and the user get the same ID
-  browserLogger.error("Reservation failed", { requestId, ...fields });
-  return new ReservationError(requestId);
-}
 ```
 
-The error UI shows it as a **support code**:
+The error message shows the ID as a **support code**, the value the user copies into the support request:
 
-```tsx
-export function ReservationErrorMessage({ requestId }: { requestId: string }) {
-  return (
-    <div role="alert">
-      <p>We could not create your reservation. Please try again.</p>
-      <p>
-        If it keeps happening, contact support with this code: <code>{requestId}</code>
-      </p>
-    </div>
-  );
-}
-```
+> We could not create your reservation. Please try again.
+> If it keeps happening, contact support with this code: `7c1e9a2b-5d3f-4e8a-9b1c-2f6d8e0a4b37`
 
-Show the whole ID. A short prefix of 8 or 12 characters looks friendlier, but with millions of requests, two of them will share it. Support pastes the code into the log platform and gets every line of that request:
+Show the whole ID. A short prefix of 8 characters looks friendlier, but with millions of requests, two of them will share it. Support pastes the code into the log platform and gets every line of that request:
 
 | Time         | Source               | Level   | Message                     |
 | ------------ | -------------------- | ------- | --------------------------- |
@@ -402,9 +403,27 @@ Show the whole ID. A short prefix of 8 or 12 characters looks friendlier, but wi
 
 "It broke on Tuesday" has become three lines that name the cause. The code reveals nothing about your system.
 
-If the API runs on another origin, the browser hides custom response headers from JavaScript until the server lists them in `Access-Control-Expose-Headers`. `crypto.randomUUID()` needs a secure context: HTTPS, or `localhost` during development.
+<details>
+<summary>Going further: offline, other origins and secure contexts</summary>
+
+**Offline.** If `fetch` itself rejects, no server answered and there is no server ID. Create one in the browser and log it the same way:
+
+```ts
+const response = await fetch(`/api/items/${itemId}/reservations`, { method: "POST" }).catch((error: unknown) => {
+  // 👇 no server answered, so no server ID
+  const requestId = crypto.randomUUID();
+  browserLogger.error("Reservation failed", { requestId, itemId, error });
+  throw new ReservationError(requestId);
+});
+```
+
+**Other origins.** If the API runs on another origin, the browser hides custom response headers from JavaScript until the server lists them in `Access-Control-Expose-Headers`.
+
+**Secure context.** `crypto.randomUUID()` needs a secure context: HTTPS, or `localhost` during development.
 
 Docs: [`Access-Control-Expose-Headers`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Expose-Headers), [`Crypto.randomUUID()`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID)
+
+</details>
 
 <details>
 <summary>Going further: readable stack traces</summary>
@@ -421,7 +440,7 @@ Docs: [webpack `devtool`](https://webpack.js.org/configuration/devtool/), [Node.
 
 ## What never to log
 
-Logs are stored for weeks, copied into tools and read by many people. Anything personal that goes into a line goes to all of those places. Treat the log pipeline like any system that processes personal data: set a retention period and restrict who can read it.
+Logs are stored for weeks, copied into tools and read by many people. Anything personal in a line goes to all of those places.
 
 | Data                                         | Risk                                     | Rule                                                              |
 | -------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------- |
@@ -430,7 +449,10 @@ Logs are stored for weeks, copied into tools and read by many people. Anything p
 | Response bodies and form input               | Addresses, names, free text              | Log the status code and a short, known error code                 |
 | Fields named `password`, `token`, `email`    | Slip in through `{ ...user }`            | Remove them in one central `redact()` step                        |
 
-Use an allowlist rather than a blocklist: a blocklist fails the day someone adds a new sensitive header. The `redact()` step runs on every line before it is written:
+Use an allowlist rather than a blocklist: a blocklist fails the day someone adds a new sensitive header. The `redact()` step runs on every line before it is written, in development and in production.
+
+<details>
+<summary>Going further: a small redact()</summary>
 
 ```ts
 const SENSITIVE = /pass(word)?|token|secret|authorization|cookie|email/i;
@@ -444,13 +466,15 @@ export function redact(fields: Fields): Fields {
 
 A real version also walks nested objects and masks values that look like email addresses.
 
+</details>
+
 ## Takeaways
 
-- In production you cannot see the user's console or the server's terminal. Send logs to one place you can search.
-- Log structured lines: a fixed message, a level and named fields, as JSON on stdout. The logger never throws and serialises `Error` explicitly.
-- Add context to every server line with `AsyncLocalStorage`, and catch browser errors from `error`, `unhandledrejection` and React's root options. Send them with `fetch` and `keepalive` when the page becomes hidden.
-- Create one request ID per request, pass it to every service, return it in a response header, and show the whole ID to the user as a support code.
-- Never log cookies, tokens, query strings or response bodies. Allowlist headers and redact every line.
+- Give every request one ID, put it on every log line and show the whole ID to the user as a support code.
+- Log structured lines as JSON: a fixed message, a level and named fields.
+- `AsyncLocalStorage` puts the request context on every server line. A global variable mixes up requests that run at the same time.
+- Queue browser errors and send them with `fetch` and `keepalive` when the page becomes hidden.
+- Never log cookies, tokens, query strings or response bodies. Redact every line.
 
 ## Further reading
 
