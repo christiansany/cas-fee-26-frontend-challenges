@@ -1,19 +1,23 @@
 # Compound Components with React
 
-## Inhalt
+> A component that takes one big configuration object is hard to read and hard to change. Compound components split it into parts you compose in JSX, like `<select>` and `<option>` in HTML, while the parent keeps the state. We build a menu three ways and compare them, then look at an accordion built with the pattern.
 
-* [Was sind Compound Components?](#was-sind-compound-components)
-* [Das Problem](#das-problem)
-* [Die Lösung](#die-lösung)
-* [Beispiel: Accordion](#beispiel-accordion)
+**Duration:** about 45 minutes
 
-## Was sind Compound Components?
+## Contents
 
-Compound Components können als ein Pattern angesehen werden, welches den **State** und das **Verhalten** einer Gruppe von Komponenten umschliesst, aber dennoch die Kontrolle des Rendering der einzelnen Teile dem Developer überlässt.
+* [What are compound components?](#what-are-compound-components)
+* [The problem](#the-problem)
+* [The solution](#the-solution)
+* [Example: Accordion](#example-accordion)
 
-Das Ziel von Compound Components ist es, eine ausdrucksstärkere und flexiblere API für die Kommunikation zwischen der übergeordneten und der untergeordneten Komponenten bereitzustellen.
+## What are compound components?
 
-Ein gutes Beispiel ist das `<select>` in Kombination mit `<option>` in HTML:
+Compound components are a pattern that encapsulates the **state** and the **behaviour** of a group of components, but leaves control over rendering the individual parts to the developer.
+
+The goal of compound components is to provide a more expressive and flexible API for communication between the parent component and its child components.
+
+A good example is `<select>` combined with `<option>` in HTML:
 
 ```html
 <select>
@@ -23,20 +27,20 @@ Ein gutes Beispiel ist das `<select>` in Kombination mit `<option>` in HTML:
 </select>
 ```
 
-Die beiden Elemente kommunizieren im Hintergrund miteinander. Das `<select>` beinhaltet den State und die `<option>`s geben aber vor was alles ausgewählt werden kann. Dies ermöglicht ein expressives Markup und die Optionen müssen nicht über einen Attribut mitgeben werden.
+The two elements communicate with each other in the background. The `<select>` holds the state, and the `<option>`s define what can be selected. This allows expressive markup, and you don't have to pass the options in an attribute.
 
 ```html
-<!-- Mit einem Attribut 😱 -->
+<!-- With an attribute 😱 -->
 <select options="name1:value1;name2:value2;name3:value3"></select>
 ```
 
-## Das Problem
+## The problem
 
-Angenommen wir müssen ein Menu erstellen. Das Menu hat einen Button um es zu öffnen und zu schliessen. Es beinhaltet einerseits Links und andererseits Buttons. Beim Klick auf diese sollte die gewünschte Aktion getriggert werden und das Menu sollte wieder geschlossen werden.
+Let's say we need to build a menu. The menu has a button that opens and closes it. It contains links and buttons. A click on one of them should trigger the action and close the menu again.
 
-Schauen wir verschiedene Implementationsarten an:
+Let's look at different ways to implement it.
 
-### Konfiguration
+### Configuration
 
 ```jsx
 function Example() {
@@ -50,38 +54,38 @@ function Example() {
       onClick: () => { /* ... */ }
     }, {
       kind: "link",
-      text: "Details anzeigen",
+      text: "Show details",
       href: "/details"
     }],
     closeOnItemClick: true,
   };
 
   return (
-    <Menu {...menuConfig}> />
+    <Menu {...menuConfig} />
   );
 }
 ```
 
-In dem Beispiel erstellen wir ein kompliziertes Konfigurationsobjekt, welches alle Informationen bereits beinhaltet die für das Rendering und für die Funktionalität von allen Komponenten innerhalb des `<Menu>` gebraucht werden. Dies ist ein weit verbreitetes Pattern.
+In this example we build a complicated configuration object. It already contains all the information that every component inside `<Menu>` needs for rendering and behaviour. This is a widespread pattern.
 
-Der State ob das Menu offen ist oder geschlossen, wird von der `<Menu>`-Komponente selbst verwaltet, dazu haben wir die Möglichkeit, dass die Unterkomponenten den State vom `<Menu>` verändern können.
+The `<Menu>` component manages whether the menu is open or closed itself, and the child components can change the state of `<Menu>`.
 
 #### Pros
 
-1. `<Menu>` regelt den internen State selbst, ob es in geöffneten oder geschlossenen Zustand ist
+1. `<Menu>` manages its own internal state, whether it is open or closed
 
 #### Cons
 
-1. Die Verantwortung für das Rendering aller Unterkomponenten ist in direkter Verantwortung vom `<Menu>`-Komponenten, welches die verschiedenen Komponenten sehr stark miteinender koppelt
-2. Die `props` werden durch mehrere Komponenten durchgereicht. Dies wird als "prop drilling" bezeichnet und gilt allgemein als "code smell"
-3. Wenn die Daten in einem anderen Format daherkommen, müssen diese zuerst auf die Struktur der Config gemappt werden
+1. `<Menu>` is directly responsible for rendering all child components, which couples the components very tightly
+2. The `props` are passed down through several components. This is called "prop drilling" and is generally considered a code smell
+3. If the data comes in a different format, you first have to map it to the structure of the config
 
 ```jsx
 function Example() {
-  // Daten welche von einer API kommen oder als Props übergeben werden
+  // Data that comes from an API or is passed in as props
   const links = [
-    { title: "Details anzeigen", target: "/details" },
-    { title: "Profil anzeigen", target: "/profile" }
+    { title: "Show details", target: "/details" },
+    { title: "Show profile", target: "/profile" }
   ];
 
   const menuConfig = {
@@ -92,21 +96,21 @@ function Example() {
       kind: "item",
       text: "Download",
       onClick: () => { /* ... */ }
-    }].concat(links.map(link => ({ // Daten müssen auf die Struktur der Config gemappt werden
+    }].concat(links.map(link => ({ // Data has to be mapped to the structure of the config
       kind: "link",
       text: link.title,
       href: link.target
-    })),
+    }))),
     closeOnItemClick: true,
   };
 
   return (
-    <Menu {...menuConfig}> />
+    <Menu {...menuConfig} />
   );
 }
 ```
 
-### Stateverwaltung selber übernehmen
+### Managing the state yourself
 
 ```jsx
 function Example() {
@@ -125,10 +129,10 @@ function Example() {
     close();
   }
 
-  // Daten welche von einer API kommen oder als Props übergeben werden
+  // Data that comes from an API or is passed in as props
   const links = [
-    { title: "Details anzeigen", target: "/details" },
-    { title: "Profil anzeigen", target: "/profile" }
+    { title: "Show details", target: "/details" },
+    { title: "Show profile", target: "/profile" }
   ];
 
   return (
@@ -137,7 +141,7 @@ function Example() {
       <MenuList>
         <MenuItem onClick={download}>Download</MenuItem>
         {links.map(link => (
-          <MenuLink to={link.target} onClick={close}>{link.title}</MenuLink>
+          <MenuLink key={link.target} to={link.target} onClick={close}>{link.title}</MenuLink>
         ))}
       </MenuList>
     </Menu>
@@ -145,21 +149,21 @@ function Example() {
 }
 ```
 
-In diesem Beispiel müssen wir zwar kein kompliziertes Konfigurationsobjekt erstellen. Da die Komponenten jedoch nicht miteinander verknüpft sind, müssen wir den State des Menu selbst verwalten.
+In this example we don't have to build a complicated configuration object. But because the components are not connected to each other, we have to manage the state of the menu ourselves.
 
 #### Pros
 
-1. Die Komponenten sind nicht mehr so eng gekoppelt und das `<Menu>` muss sich nicht mehr um das Rendering der Unterkomponenten kümmern
-2. Die Datenstruktur spielt keine Rolle mehr
+1. The components are no longer tightly coupled, and `<Menu>` no longer has to take care of rendering its child components
+2. The data structure no longer matters
 
 #### Cons
 
-1. State muss selbst verwaltet werden, je nach Komponenten wird dies sehr kompliziert
+1. You have to manage the state yourself. Depending on the component, this gets very complicated
 
-## Die Lösung
+## The solution
 
-Mit dem Compound Components Pattern können wir diese beiden Ansätze miteinander verbinden.  
-Der State welchen wir nicht selbst verwalten wollen, ist in dem `<Menu>`-Komponenten verwaltet. Die verschiedenen Komponenten kommunizieren per [React Context API](https://react.dev/reference/react/useContext) und somit sind die Implementationsdetails komplett abgekapselt. Wir können uns also voll und ganz um unsere Implementation kümmern.
+The compound components pattern combines both approaches.  
+The state we don't want to manage ourselves lives in the `<Menu>` component. The components communicate through [React Context](https://react.dev/reference/react/useContext), so the implementation details are fully encapsulated. We can focus entirely on our own implementation.
 
 ```jsx
 function Example() {
@@ -172,32 +176,36 @@ function Example() {
       <Menu.Button>Menu</Menu.Button>
       <Menu.List>
         <Menu.Item onClick={download}>Download</Menu.Item>
-        <Menu.Link to="details">Details anzeigen</Menu.Link>
+        <Menu.Link to="details">Show details</Menu.Link>
       </Menu.List>
     </Menu>
   );
 }
 ```
 
-Sieht doch viel besser aus, oder? 😍
+This reads much better.
 
 #### Pros
 
-1. State muss nicht selbst verwaltet werden, je nach Implementation kann aber trotzdem auf diesen zugegriffen werden (per Renderprops)
-2. Die Datenstruktur spielt keine Rolle mehr
-3. Die Komponenten sind nicht eng miteinander gekoppelt
+1. You don't have to manage the state yourself, but depending on the implementation you can still access it (through render props)
+2. The data structure no longer matters
+3. The components are not tightly coupled
 
-**Hilfreiche Links**
+Since React 19, you render the context itself as the provider: `<MenuContext value={state}>` instead of `<MenuContext.Provider value={state}>`. The parts read it with `useContext(MenuContext)`.
+
+Docs: [react.dev: createContext](https://react.dev/reference/react/createContext), [react.dev: useContext](https://react.dev/reference/react/useContext)
+
+**Useful links**
 
 * [Passing Data Deeply with Context](https://react.dev/learn/passing-data-deeply-with-context)
 
-## Beispiel: Accordion
+## Example: Accordion
 
-Hier sind verschiedene Nutzungen von einem Accordion, welches als Compound Component erstellt wurde.
+Here are different ways to use an accordion built as a compound component.
 
-**Accordion mit statischen Daten**
+**Accordion with static data**
 
-Per Renderprops können wir auch an Daten rankommen, welche vom Accordion verwaltet werden. Dies ist natürlich optional, und man muss nicht auf die Renderprops zugreiffen. Für Infos, wie diese optionalen Renderprops genutzt werden können, könnt ihr die unten verlinkte Demo anschauen.
+With render props you can also access data that the accordion manages. This is optional, and you don't have to use the render props. To see how to use these optional render props, look at the demo linked below.
 
 ```jsx
 function App() {
@@ -241,11 +249,11 @@ function App() {
 }
 ```
 
-**Accordion mit Daten aus einem Array**
+**Accordion with data from an array**
 
 ```jsx
 function App() {
-  // Die Daten können von überall bezogen werden und in jeglicher Struktur genutzt werden
+  // The data can come from anywhere and be used in any structure
   const data = [{
     id: "1",
     title: "Section 1",
@@ -263,7 +271,7 @@ function App() {
   return (
     <Accordion multiple>
       {data.map(entry => (
-        <Accordion.Item id={entry.id}>
+        <Accordion.Item key={entry.id} id={entry.id}>
           <Accordion.Toggle>
             {entry.title}
           </Accordion.Toggle>
@@ -281,7 +289,7 @@ function App() {
 
 - [Accordion Compound Component (React)](https://github.com/christiansany/react-compound-components)
 
-**Hilfreiche Links**
+**Useful links**
 
 * [React Hooks: Compound Components](https://kentcdodds.com/blog/compound-components-with-react-hooks)
 * [Passing data with a render prop](https://react.dev/reference/react/cloneElement#passing-data-with-a-render-prop)
