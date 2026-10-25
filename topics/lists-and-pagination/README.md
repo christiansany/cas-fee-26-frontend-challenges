@@ -29,11 +29,11 @@ const [page, setPage] = useState(1);
 
 Das funktioniert, bis jemand etwas Alltägliches tut:
 
-| Wer...                                  | bekommt                              |
-| --------------------------------------- | ------------------------------------ |
-| die Seite neu lädt                      | Seite 1, keine Filter                |
-| den Link an eine Kollegin schickt       | eine andere Liste                    |
-| einen Eintrag öffnet und Zurück drückt  | eine ungefilterte Liste, ganz oben   |
+| Wer...                                 | bekommt                            |
+| -------------------------------------- | ---------------------------------- |
+| die Seite neu lädt                     | Seite 1, keine Filter              |
+| den Link an eine Kollegin schickt      | eine andere Liste                  |
+| einen Eintrag öffnet und Zurück drückt | eine ungefilterte Liste, ganz oben |
 
 Stell dir jetzt vor, der Lending Desk ist zu einer firmenweiten Plattform mit Millionen von Einträgen gewachsen. Leute teilen gefilterte Listen im Chat, und Suchmaschinen indexieren Kategorieseiten.
 
@@ -112,10 +112,10 @@ flowchart TB
 
 Wähle die Methode danach, was "Zurück" bedeuten soll:
 
-| Methode                | Browser-History               | Verwenden für                                                          |
-| ---------------------- | ----------------------------- | ---------------------------------------------------------------------- |
-| `history.pushState`    | legt einen Verlaufseintrag obendrauf  | eine Kategorie, die Sortierung, eine Seitenzahl: Zurück macht die Wahl rückgängig |
-| `history.replaceState` | ersetzt den obersten Verlaufseintrag  | Tippen, einen Slider, "Mehr laden": Zurück verlässt die Liste           |
+| Methode                | Browser-History                      | Verwenden für                                                                     |
+| ---------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| `history.pushState`    | legt einen Verlaufseintrag obendrauf | eine Kategorie, die Sortierung, eine Seitenzahl: Zurück macht die Wahl rückgängig |
+| `history.replaceState` | ersetzt den obersten Verlaufseintrag | Tippen, einen Slider, "Mehr laden": Zurück verlässt die Liste                     |
 
 Doku: [pushState](https://developer.mozilla.org/en-US/docs/Web/API/History/pushState), [replaceState](https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState)
 
@@ -131,7 +131,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 createRoot(document.getElementById("root")!).render(
   <NuqsAdapter>
     <App />
-  </NuqsAdapter>,
+  </NuqsAdapter>
 );
 ```
 
@@ -146,7 +146,7 @@ export const listParsers = {
   q: parseAsString.withDefault(""),
   category: parseAsString.withDefault(""),
   sort: parseAsStringLiteral(SORTS).withDefault("relevance"),
-  page: parseAsInteger.withDefault(1),
+  page: parseAsInteger.withDefault(1)
 };
 ```
 
@@ -247,12 +247,12 @@ page 1:  A B C              the server returns endCursor = C
 page 2:  after=C → D E F    a new item N at the top shifts nothing
 ```
 
-|                                  | Offset (`?page=3`)            | Cursor (`after=...`)                                  |
-| -------------------------------- | ----------------------------- | ----------------------------------------------------- |
-| Zu Seite 37 springen             | ja                            | nein, nur nächste und vorherige                       |
-| Stabil, wenn sich Daten ändern   | nein                          | ja                                                    |
-| Kosten tiefer Seiten             | wachsen mit dem Offset        | etwa konstant, mit einem Index auf dem Sortier-Key    |
-| Passt zu                         | kleinen Listen, Admin-Tabellen | grossen, sich ändernden Listen und Feeds             |
+|                                | Offset (`?page=3`)             | Cursor (`after=...`)                               |
+| ------------------------------ | ------------------------------ | -------------------------------------------------- |
+| Zu Seite 37 springen           | ja                             | nein, nur nächste und vorherige                    |
+| Stabil, wenn sich Daten ändern | nein                           | ja                                                 |
+| Kosten tiefer Seiten           | wachsen mit dem Offset         | etwa konstant, mit einem Index auf dem Sortier-Key |
+| Passt zu                       | kleinen Listen, Admin-Tabellen | grossen, sich ändernden Listen und Feeds           |
 
 Für kleine Listen reicht Offset. Wechsle zu Cursors, wenn die Liste gross ist und sich ändert, während Leute sie lesen.
 
@@ -308,12 +308,12 @@ Doku: [scrollRestoration auf MDN](https://developer.mozilla.org/en-US/docs/Web/A
 <details>
 <summary>Weiterführend: nummerierte Seiten, "Mehr laden" oder Infinite Scroll</summary>
 
-|                    | Nummerierte Seiten                 | "Mehr laden"-Button                     | Infinite Scroll                               |
-| ------------------ | ---------------------------------- | --------------------------------------- | --------------------------------------------- |
-| Kontrolle für User | hoch: springen und vergleichen     | hoch: User entscheiden selbst            | tief: es kommt immer mehr Inhalt              |
-| Zurück-Button      | funktioniert: die Seite steht in der URL | braucht die Anzahl in der URL     | schwierig: braucht Anzahl und Scroll-Position |
-| Footer erreichbar  | ja                                 | ja                                      | erst, wenn die Liste endet                    |
-| Suchmaschinen      | gut: jede Seite hat eine URL       | gut, wenn jeder Abschnitt einen Link hat | schlecht ohne paginierten Fallback           |
+|                    | Nummerierte Seiten                       | "Mehr laden"-Button                      | Infinite Scroll                               |
+| ------------------ | ---------------------------------------- | ---------------------------------------- | --------------------------------------------- |
+| Kontrolle für User | hoch: springen und vergleichen           | hoch: User entscheiden selbst            | tief: es kommt immer mehr Inhalt              |
+| Zurück-Button      | funktioniert: die Seite steht in der URL | braucht die Anzahl in der URL            | schwierig: braucht Anzahl und Scroll-Position |
+| Footer erreichbar  | ja                                       | ja                                       | erst, wenn die Liste endet                    |
+| Suchmaschinen      | gut: jede Seite hat eine URL             | gut, wenn jeder Abschnitt einen Link hat | schlecht ohne paginierten Fallback            |
 
 Crawler klicken keine Buttons und scrollen nicht; sie folgen `<a href>`-Links. Gib darum jedem Abschnitt eine eigene URL, etwa `?page=3`, und verlinke sie.
 

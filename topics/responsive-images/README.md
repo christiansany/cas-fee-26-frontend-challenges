@@ -6,9 +6,9 @@
 
 ## Inhalt
 
-* [Intro](#intro)
-* [Responsive Images](#responsive-images)
-* [Umsetzung](#umsetzung)
+- [Intro](#intro)
+- [Responsive Images](#responsive-images)
+- [Umsetzung](#umsetzung)
 
 ## Intro
 
@@ -28,21 +28,21 @@ Es gibt einen Unterschied zwischen **CSS-Pixeln** und **Gerätepixeln** (physisc
 
 **Beispiele für Device Pixel Ratio (DPR)**
 
-| Device | Gerätepixel | CSS-Pixel | Device Pixel Ratio (DPR) |
-|---|--:|--:|:-:|
-| iPhone 6, 6s, 7, 8, SE (2020) | 750 x 1334 | 375 x 667 | 2 |
-| iPhone 11 Pro, X, XS | 1125 x 2436 | 375 x 812 | 3 |
-| iPad Air 2020 | 2360 x 1640 | 1180 x 820 | 2 |
+| Device                        | Gerätepixel |  CSS-Pixel | Device Pixel Ratio (DPR) |
+| ----------------------------- | ----------: | ---------: | :----------------------: |
+| iPhone 6, 6s, 7, 8, SE (2020) |  750 x 1334 |  375 x 667 |            2             |
+| iPhone 11 Pro, X, XS          | 1125 x 2436 |  375 x 812 |            3             |
+| iPad Air 2020                 | 2360 x 1640 | 1180 x 820 |            2             |
 
 **Scharfe Bilder liefern**
 
 Wie gross müssen unsere Bilder also sein, damit sie auf diesen Geräten nicht verschwommen aussehen?
 
 | CSS-Pixel | DPR 1.0 | DPR 2.0 (4x px) | DPR 3.0 (9x px) | DPR 4.0 (16x px) |
-|--:|--:|--:|--:|--:|
-| 40px | 40px | 80px | 120px | 160px |
-| 150px | 150px | 300px | 450px | 600px |
-| 400px | 400px | 800px | 1200px | 1600px |
+| --------: | ------: | --------------: | --------------: | ---------------: |
+|      40px |    40px |            80px |           120px |            160px |
+|     150px |   150px |           300px |           450px |            600px |
+|     400px |   400px |           800px |          1200px |           1600px |
 
 Die Tabelle zeigt: Bei einer DPR von **3x** oder **4x** **wächst die Bildgrösse schnell**, wenn das Bild scharf aussehen soll. Das ist ungünstig, weil in mobilen Geräten meist schwächere Hardware steckt als in Desktop-Geräten. Dazu kommt eine eventuell langsamere Mobilverbindung, was das Problem verstärkt.
 
@@ -69,16 +69,17 @@ Bei Responsive Images musst du auf folgende Schwierigkeiten achten:
 Den Density Descriptor kannst du innerhalb eines `srcset` nutzen. Er gibt dem Browser Metainformationen, damit dieser entscheiden kann, welches Bild er herunterlädt.  
 Im Beispiel unten würde ein iPhone 6 (DPR 2) das Bild `cat-400px.jpg` laden, ein iPhone X (DPR 3) das Bild `cat-600px.jpg`.
 
-*Wichtig: Der Descriptor sagt dem Browser nur, welches Bild für welche DPR gedacht ist. Wie breit das Bild ist, erfährt der Browser dadurch nicht.*
+_Wichtig: Der Descriptor sagt dem Browser nur, welches Bild für welche DPR gedacht ist. Wie breit das Bild ist, erfährt der Browser dadurch nicht._
 
 **Beispiel**
 
 ```html
-<img src="cat-200px.jpg" width="200" alt=""
-     srcset="cat-200px.jpg 1x,
-             cat-400px.jpg 2x,
-             cat-600px.jpg 3x,
-             cat-800px.jpg 4x">
+<img
+  src="cat-200px.jpg"
+  width="200"
+  alt=""
+  srcset="cat-200px.jpg 1x, cat-400px.jpg 2x, cat-600px.jpg 3x, cat-800px.jpg 4x"
+/>
 ```
 
 **Vorteile**
@@ -95,7 +96,7 @@ Ein Gerät mit einer DPR von z.B. 1.5 bekommt in der Regel das nächstgrössere 
 
 **Hilfreiche Links**
 
-* [Use density descriptors](https://web.dev/articles/codelab-density-descriptors)
+- [Use density descriptors](https://web.dev/articles/codelab-density-descriptors)
 
 ### Die Width Descriptor Methode mit dem `sizes`-Attribut
 
@@ -106,24 +107,25 @@ Diese Methode ist vor allem dann sinnvoll, wenn sich die Breite eines Bildes mit
 **Beispiel**
 
 ```html
-<img src="cat-200px.jpg" alt=""
-     srcset="cat-200px.jpg 200w,
-             cat-400px.jpg 400w,
-             cat-600px.jpg 600w,
-             cat-800px.jpg 800w">
+<img
+  src="cat-200px.jpg"
+  alt=""
+  srcset="cat-200px.jpg 200w, cat-400px.jpg 400w, cat-600px.jpg 600w, cat-800px.jpg 800w"
+/>
 ```
 
 Diese Information allein nützt dem Browser wenig, da er noch nicht weiss, wie breit das Bild angezeigt wird. Weil sich die Anzeigebreite mit der Breite des Viewports ändert, taugt auch ein festes `width`-Attribut nicht als Angabe der Anzeigebreite. `width` und `height` setzen wir trotzdem (siehe "Laden und Priorität"): Sie liefern dem Browser das Seitenverhältnis.
 
 #### Das `sizes`-Attribut
 
-Das `sizes`-Attribut teilt dem Browser mit, wie breit ein Bild effektiv dargestellt wird. Es nimmt entweder einen Wert oder mehrere, getrennt durch ein **,** (Komma). Im Attribut kannst du Media Queries verwenden. Bei mehreren Werten wertet der Browser sie von *links nach rechts* aus. Sobald eine Media Query zutrifft, nutzt er diese Grösse als Anzeigebreite des Bildes. Der letzte Wert hat keine Media Query und gilt als Fallback. Ohne `sizes`-Attribut geht der Browser von `100vw` aus.
+Das `sizes`-Attribut teilt dem Browser mit, wie breit ein Bild effektiv dargestellt wird. Es nimmt entweder einen Wert oder mehrere, getrennt durch ein **,** (Komma). Im Attribut kannst du Media Queries verwenden. Bei mehreren Werten wertet der Browser sie von _links nach rechts_ aus. Sobald eine Media Query zutrifft, nutzt er diese Grösse als Anzeigebreite des Bildes. Der letzte Wert hat keine Media Query und gilt als Fallback. Ohne `sizes`-Attribut geht der Browser von `100vw` aus.
 
 ![Das sizes-Attribut](./assets/sizes-attr.png)
 
 **Bedingung für die Bildgrösse**
 
 Als Breite sind alle CSS-Längen erlaubt, typischerweise:
+
 - In `vw`
 - In `px` (oder `em`, `rem` usw.; relative Einheiten beziehen sich auf das Root-Element)
 - Als Kombination davon in einem `calc()`
@@ -133,22 +135,21 @@ Prozentwerte sind nicht erlaubt.
 **Beispiel**
 
 ```html
-sizes="(max-width: 399px) 50vw,
-       (min-width: 400px) and (max-width: 900px) calc(30vw - 40px), 
-       100vw"
+sizes="(max-width: 399px) 50vw, (min-width: 400px) and (max-width: 900px) calc(30vw - 40px), 100vw"
 ```
 
 Das nächste Beispiel zeigt ein Bild, dessen Breite immer relativ zum Viewport ist, bis der Viewport eine bestimmte Grösse erreicht. Ab dann ist die Breite des Bildes fix und wird nicht mehr grösser.
 
 ```html
-<img src="cat.jpg" alt="" 
-     srcset="cat-200px.jpg 200w, 
-             cat-400px.jpg 400w, 
-             cat-600px.jpg 600w"
-      sizes="(min-width: 1400px) 340px,
+<img
+  src="cat.jpg"
+  alt=""
+  srcset="cat-200px.jpg 200w, cat-400px.jpg 400w, cat-600px.jpg 600w"
+  sizes="(min-width: 1400px) 340px,
              (min-width: 1200px) 33vw,
              (min-width: 800px) 50vw,
-             100vw">
+             100vw"
+/>
 ```
 
 Mit den Informationen über die **verfügbaren Bilder** und die **Breite**, in der das Bild angezeigt wird, kann der Browser nun entscheiden, welches Bild er herunterlädt, damit es möglichst scharf aussieht. Dafür nutzt er auch die **DPR** des Geräts und z.B. die Verbindungsgeschwindigkeit.
@@ -156,24 +157,29 @@ Mit den Informationen über die **verfügbaren Bilder** und die **Breite**, in d
 **Avatar-Beispiel**
 
 ```html
-<img src="avatar.jpg" alt="" 
-     srcset="avatar-40px.jpg 40w, 
-             avatar-60px.jpg 60w, 
-             avatar-80px.jpg 80w, 
-             avatar-100px.jpg 100w, 
-             avatar-120px.jpg 120w, 
-             avatar-160px.jpg 160w"
-      sizes="(min-width: 1024px) 60px,
-             40px">
+<img
+  src="avatar.jpg"
+  alt=""
+  srcset="
+    avatar-40px.jpg   40w,
+    avatar-60px.jpg   60w,
+    avatar-80px.jpg   80w,
+    avatar-100px.jpg 100w,
+    avatar-120px.jpg 120w,
+    avatar-160px.jpg 160w
+  "
+  sizes="(min-width: 1024px) 60px,
+             40px"
+/>
 ```
 
-| Viewport-Breite | DPR | Anzeigebreite | Bild |
-|---|--:|--:|:--|
-| `300px` | 2 | `40px` | `avatar-80px.jpg` |
-| `600px` | 3 | `40px` | `avatar-120px.jpg` |
-| `1400px` | 1 | `60px` | `avatar-60px.jpg` |
-| `1400px` | 1.5 | `60px` | `avatar-100px.jpg` |
-| `1400px` | 2 | `60px` | `avatar-120px.jpg` |
+| Viewport-Breite | DPR | Anzeigebreite | Bild               |
+| --------------- | --: | ------------: | :----------------- |
+| `300px`         |   2 |        `40px` | `avatar-80px.jpg`  |
+| `600px`         |   3 |        `40px` | `avatar-120px.jpg` |
+| `1400px`        |   1 |        `60px` | `avatar-60px.jpg`  |
+| `1400px`        | 1.5 |        `60px` | `avatar-100px.jpg` |
+| `1400px`        |   2 |        `60px` | `avatar-120px.jpg` |
 
 **Demo** 🤯
 
@@ -189,17 +195,15 @@ Mit dem `<source>`-Element kannst du innerhalb des `<picture>`-Elements mehrere 
 
 ![Sources im picture-Element](./assets/sources.png)
 
-Bei mehreren `<source>`-Elementen wertet der Browser sie von *der ersten bis zur letzten* aus. Sobald er eine `<source>` findet, die alle Kriterien erfüllt, verwendet er dieses Bild.
+Bei mehreren `<source>`-Elementen wertet der Browser sie von _der ersten bis zur letzten_ aus. Sobald er eine `<source>` findet, die alle Kriterien erfüllt, verwendet er dieses Bild.
 
 **Beispiel**
 
 ```html
 <picture>
-   <source media="(min-width:600px) and (max-width:1200px)"
-           srcset="cat-medium.jpg">
-   <source media="(min-width:1201px)"
-           srcset="cat-large.jpg">
-   <img src="cat-small.jpg" alt="">
+  <source media="(min-width:600px) and (max-width:1200px)" srcset="cat-medium.jpg" />
+  <source media="(min-width:1201px)" srcset="cat-large.jpg" />
+  <img src="cat-small.jpg" alt="" />
 </picture>
 ```
 
@@ -214,10 +218,10 @@ AVIF ergibt meist die kleinsten Dateien, gefolgt von WebP. Beide funktionieren i
 
 ```html
 <picture>
-  <source srcset="cat-avif.avif" type="image/avif">
-  <source srcset="cat-webp.webp" type="image/webp">
-  <source srcset="cat-jpg.jpg" type="image/jpeg">
-  <img src="cat-jpg.jpg" alt="">
+  <source srcset="cat-avif.avif" type="image/avif" />
+  <source srcset="cat-webp.webp" type="image/webp" />
+  <source srcset="cat-jpg.jpg" type="image/jpeg" />
+  <img src="cat-jpg.jpg" alt="" />
 </picture>
 ```
 
@@ -225,8 +229,8 @@ Doku: [MDN: Image file type and format guide](https://developer.mozilla.org/en-U
 
 **Hilfreiche Links**
 
-* [AVIF has landed](https://jakearchibald.com/2020/avif-has-landed/)
-* [Using WebP Images](https://css-tricks.com/using-webp-images/)
+- [AVIF has landed](https://jakearchibald.com/2020/avif-has-landed/)
+- [Using WebP Images](https://css-tricks.com/using-webp-images/)
 
 ### Laden und Priorität
 
@@ -238,9 +242,15 @@ Die richtige Datei ist erst die halbe Arbeit. Der Browser muss auch wissen, wann
 - **Lazy Images vom Browser messen lassen.** Bei Lazy Images kannst du `sizes` mit `auto` beginnen: Der Browser nimmt dann die tatsächliche Layout-Breite des Bildes. Chrome, Edge und Firefox unterstützen das, Safari noch nicht zuverlässig. Lass deshalb deine berechneten `sizes` als Fallback nach `auto` stehen.
 
 ```html
-<img src="cat-400px.jpg" alt="" width="800" height="600" loading="lazy"
-     srcset="cat-400px.jpg 400w, cat-800px.jpg 800w, cat-1600px.jpg 1600w"
-     sizes="auto, (min-width: 800px) 50vw, 100vw">
+<img
+  src="cat-400px.jpg"
+  alt=""
+  width="800"
+  height="600"
+  loading="lazy"
+  srcset="cat-400px.jpg 400w, cat-800px.jpg 800w, cat-1600px.jpg 1600w"
+  sizes="auto, (min-width: 800px) 50vw, 100vw"
+/>
 ```
 
 Doku: [MDN: `<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority), [web.dev: Optimize Largest Contentful Paint](https://web.dev/articles/optimize-lcp)
@@ -254,7 +264,7 @@ Die Übung enthält bereits das Grid-System von Bootstrap.
 - [ ] Füge ein Responsive Image ein und nimm dafür die Bilddateien unter `./images/`
   - [ ] Das Bild sollte auf xs 12 Spalten breit sein, auf rg 6 Spalten und ab lg 4 Spalten
   - [ ] Berechne die sizes so, dass die Grösse auf jedem Breakpoint stimmt.  
-  Schau dir dazu auch das CSS an: Wie viel Padding haben der Container, die Row und die Col? Berücksichtige diese Werte bei der Berechnung.
+        Schau dir dazu auch das CSS an: Wie viel Padding haben der Container, die Row und die Col? Berücksichtige diese Werte bei der Berechnung.
 
 Zeit: etwa 15 min
 
@@ -269,17 +279,17 @@ Die Komponente sollte sich wie ein **Atom** verhalten und in allen anderen Modul
 
 ### Art Direction
 
-Zum einen haben wir viele verschiedene Seitenverhältnisse, die in den verschiedenen Modulen vorkommen können.  
+Zum einen haben wir viele verschiedene Seitenverhältnisse, die in den verschiedenen Modulen vorkommen können.
 
 ![Seitenverhältnisse im Design](./assets/design-ratios.png)
 
-*Screenshot aus dem Design*
+_Screenshot aus dem Design_
 
 Zum anderen gibt es Module, die auf Breakpoint x ein anderes Seitenverhältnis haben als auf Breakpoint y.
 
 ![Art Direction im Design](./assets/design-art-direction.png)
 
-*Screenshot aus dem Design*
+_Screenshot aus dem Design_
 
 ### `srcset` & `sizes`
 
@@ -291,6 +301,7 @@ In diesem Beispiel ist das zweite Modul auf Tablet 8/8 Spalten breit, auf kleine
 ![Beispiel-Grid](./assets/image-ratio-grid.png)
 
 Damit wir die `sizes` richtig berechnen können, müssen wir mehrere Parameter berücksichtigen:
+
 - Die Breite des Containers
 - Die Maximalbreite des Containers
 - Die Spaltenanzahl auf jedem Breakpoint
@@ -301,7 +312,8 @@ Mit all diesen Parametern könnte eine Size so aussehen:
 **Struktur**
 
 ```html
-sizes="(min-width: {breakpoint-width}) calc(({base} - 2 * {container-padding} + {gutter}) * ({columns}/{max-columns}) - {gutter})"
+sizes="(min-width: {breakpoint-width}) calc(({base} - 2 * {container-padding} + {gutter}) *
+({columns}/{max-columns}) - {gutter})"
 ```
 
 **Beispiel**
@@ -314,11 +326,11 @@ sizes="(min-width: 1441px) calc((1440px - 2 * 128px + 16px) * (3/12) - 16px)"
 
 - [Proof of Concept](https://codepen.io/christiansany/pen/jQGjwd)
 
-*Der Proof of Concept wurde für post.ch gebaut. Seine sizes stimmen nicht genau mit denen von css.ch überein, aber das Prinzip wird sichtbar.*
+_Der Proof of Concept wurde für post.ch gebaut. Seine sizes stimmen nicht genau mit denen von css.ch überein, aber das Prinzip wird sichtbar._
 
 #### Die `sizes` berechnen
 
-**Die sizes innerhalb eines Grids zu berechnen, ist nicht immer trivial.** Deshalb haben wir einen **Helper** gebaut: Du übergibst die Anzahl Spalten, über die sich das Bild erstreckt, und der Helper gibt die richtigen `sizes` zurück.  
+**Die sizes innerhalb eines Grids zu berechnen, ist nicht immer trivial.** Deshalb haben wir einen **Helper** gebaut: Du übergibst die Anzahl Spalten, über die sich das Bild erstreckt, und der Helper gibt die richtigen `sizes` zurück.
 
 ```typescript
 export type BreakpointName = "large" | "medium" | "small";
@@ -335,20 +347,20 @@ const breakpoints: Breakpoint[] = [
     name: "large",
     width: "1000px",
     containerPadding: "64px",
-    gutter: "16px",
+    gutter: "16px"
   },
   {
     name: "medium",
     width: "440px",
     containerPadding: "32px",
-    gutter: "16px",
+    gutter: "16px"
   },
   {
     name: "small",
     width: "0px",
     containerPadding: "16px",
-    gutter: "16px",
-  },
+    gutter: "16px"
+  }
 ];
 
 export const getBreakpointByName = (name: BreakpointName): Breakpoint => {
@@ -393,10 +405,7 @@ export const mapImageSizesToColumns = (
             config.columns,
             undefined
           )}`;
-        } else if (
-          breakpoint.name === "small" ||
-          configs.length === index + 1
-        ) {
+        } else if (breakpoint.name === "small" || configs.length === index + 1) {
           // "small" is the smallest breakpoint and should not have a media query
           return widthCalc(
             "100vw",
@@ -421,12 +430,12 @@ export const mapImageSizesToColumns = (
 ```
 
 **Beispiel**
-  
+
 ```ts
 const sizes = mapImageSizesToColumns([
   { name: "large", columns: 4 },
   { name: "medium", columns: 6 },
-  { name: "small", columns: 12 },
+  { name: "small", columns: 12 }
 ]);
 
 // sizes

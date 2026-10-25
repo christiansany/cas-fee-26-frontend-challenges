@@ -6,12 +6,12 @@
 
 ## Inhalt
 
-* [Das Problem](#das-problem)
-* [Lazy Loading](#lazy-loading)
-* [Lazy Loading in React](#lazy-loading-in-react)
-* [Alles kombinieren](#alles-kombinieren)
-* [Vor dem Klick laden: Prefetching](#vor-dem-klick-laden-prefetching)
-* [Zusammenfassung](#zusammenfassung)
+- [Das Problem](#das-problem)
+- [Lazy Loading](#lazy-loading)
+- [Lazy Loading in React](#lazy-loading-in-react)
+- [Alles kombinieren](#alles-kombinieren)
+- [Vor dem Klick laden: Prefetching](#vor-dem-klick-laden-prefetching)
+- [Zusammenfassung](#zusammenfassung)
 
 ## Das Problem
 
@@ -34,7 +34,7 @@ Lazy Loading ist eine Technik, bei der Ressourcen wie Bilder oder JavaScript ers
 Für Bilder und iframes brauchst du kein JavaScript. Mit `loading="lazy"` schiebt der Browser den Request auf, bis das Element einen bestimmten Abstand zum Viewport erreicht. Alle aktuellen Browser unterstützen das für beide Elemente.
 
 ```html
-<img src="item-photo.jpg" alt="Camera" width="800" height="600" loading="lazy">
+<img src="item-photo.jpg" alt="Camera" width="800" height="600" loading="lazy" />
 <iframe src="https://example.com/map" title="Pick-up location" loading="lazy"></iframe>
 ```
 
@@ -65,20 +65,20 @@ Der `IntersectionObserver` ist eine JavaScript-API, mit der du überwachst, wann
 
 ```js
 // Create the IntersectionObserver instance
-// We provide a callback that is run when the Observer detects a change 
+// We provide a callback that is run when the Observer detects a change
 // (and when an element is first observed)
 const observer = new IntersectionObserver((entries) => {
   // entries contains all IntersectionObserver Entries where a change was detected
-  entries.forEach(entry => {
+  entries.forEach((entry) => {
     // Toggles the class in-view, depending on entry.isIntersecting
-    entry.target.classList.toggle("in-view", entry.isIntersecting)
-  })
-})
+    entry.target.classList.toggle("in-view", entry.isIntersecting);
+  });
+});
 
 // Tell our IntersectionObserver to observe our elements
-document.querySelectorAll(".page").forEach(page => {
+document.querySelectorAll(".page").forEach((page) => {
   observer.observe(page);
-})
+});
 ```
 
 **Demo** 🤯
@@ -90,15 +90,18 @@ document.querySelectorAll(".page").forEach(page => {
 Die Option `rootMargin` definiert einen Offset um den Viewport. Damit sagst du dem `IntersectionObserver`, dass er das Callback ausführen soll, bevor das Element den Viewport tatsächlich betritt. Das Element gilt zu diesem Zeitpunkt bereits als `isIntersecting`.
 
 ```js
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    entry.target.classList.toggle("in-view", entry.isIntersecting);
-  });
-}, {
-  // Element is considered intersecting 200px before it enters the viewport
-  // This works for both directions (top and bottom)
-  rootMargin: "200px",
-});
+const observer = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      entry.target.classList.toggle("in-view", entry.isIntersecting);
+    });
+  },
+  {
+    // Element is considered intersecting 200px before it enters the viewport
+    // This works for both directions (top and bottom)
+    rootMargin: "200px"
+  }
+);
 ```
 
 **Demo** 🤯
@@ -114,21 +117,24 @@ Um den Effekt zu sehen, öffne das Sandbox-Resultat in einem neuen Fenster.
 Die Option `threshold` definiert, welcher Anteil des Elements im Viewport sein muss, damit es als `isIntersecting` gilt. Sie akzeptiert auch ein Array von Werten, um mehrere Schwellenwerte zu definieren.
 
 ```js
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    entry.target.classList.toggle("in-view", entry.isIntersecting);
-  });
-}, {
-  // Element is considered intersecting even when only one pixel is visible.
-  // This is the default value.
-  threshold: 0,
+const observer = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      entry.target.classList.toggle("in-view", entry.isIntersecting);
+    });
+  },
+  {
+    // Element is considered intersecting even when only one pixel is visible.
+    // This is the default value.
+    threshold: 0,
 
-  // Element is considered intersecting when 25% of it is visible.
-  threshold: 0.25,
+    // Element is considered intersecting when 25% of it is visible.
+    threshold: 0.25,
 
-  // Element is considered intersecting when 99% of it is visible.
-  threshold: 0.99,
-});
+    // Element is considered intersecting when 99% of it is visible.
+    threshold: 0.99
+  }
+);
 ```
 
 **Demo** 🤯
@@ -140,22 +146,25 @@ const observer = new IntersectionObserver((entries) => {
 Mit dem `IntersectionObserver` kannst du ein Element auch nur einmal beobachten. Sobald das Element zum ersten Mal den Viewport betritt, beobachtest du es nicht mehr.
 
 ```js
-const observer = new IntersectionObserver((entries, observer) => {
-  entries.forEach(entry => {
-    entry.target.classList.toggle("in-view", entry.isIntersecting);
-    console.log({ element: entry.target.className, isIntersection: entry.isIntersecting});
+const observer = new IntersectionObserver(
+  (entries, observer) => {
+    entries.forEach((entry) => {
+      entry.target.classList.toggle("in-view", entry.isIntersecting);
+      console.log({ element: entry.target.className, isIntersection: entry.isIntersecting });
 
-    // Stop observing the element, once it is intersecting
-    if(entry.isIntersecting) {
-      console.log(`No longer observing ${entry.target.className}`);
-      observer.unobserve(entry.target);
-    }
-  });
-}, {
-  threshold: 0.25,
-});
+      // Stop observing the element, once it is intersecting
+      if (entry.isIntersecting) {
+        console.log(`No longer observing ${entry.target.className}`);
+        observer.unobserve(entry.target);
+      }
+    });
+  },
+  {
+    threshold: 0.25
+  }
+);
 
-document.querySelectorAll(".page").forEach(page => {
+document.querySelectorAll(".page").forEach((page) => {
   observer.observe(page);
 });
 ```
@@ -165,15 +174,15 @@ document.querySelectorAll(".page").forEach(page => {
 - [IntersectionObserver Once](https://codesandbox.io/s/ldppv2?file=/src/index.mjs)
 
 > **Das Wichtigste in Kürze**
->  
-> * Der `IntersectionObserver` führt ein Callback aus, wenn ein Element in den Viewport eintritt oder ihn verlässt
-> * Mit `rootMargin` führst du das Callback aus, bevor das Element den Viewport betritt
-> * Mit `threshold` definierst du, wie viel des Elements im Viewport sein muss, damit es als `isIntersecting` gilt
-> * Du kannst den `IntersectionObserver` für alle möglichen Side Effects nutzen, zum Beispiel für Tracking
+>
+> - Der `IntersectionObserver` führt ein Callback aus, wenn ein Element in den Viewport eintritt oder ihn verlässt
+> - Mit `rootMargin` führst du das Callback aus, bevor das Element den Viewport betritt
+> - Mit `threshold` definierst du, wie viel des Elements im Viewport sein muss, damit es als `isIntersecting` gilt
+> - Du kannst den `IntersectionObserver` für alle möglichen Side Effects nutzen, zum Beispiel für Tracking
 
 **Hilfreiche Links**
 
-* [IntersectionObserver](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver)
+- [IntersectionObserver](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver)
 
 ### Lazy Loading in Aktion
 
@@ -231,9 +240,7 @@ export default function App() {
           IntersectionObserver */}
       <div ref={ref}>
         {/* LazyComponent will render if the parent is intersecting */}
-        <Suspense fallback={null}>
-          {inView ? <LazyComponent /> : null}
-        </Suspense>
+        <Suspense fallback={null}>{inView ? <LazyComponent /> : null}</Suspense>
       </div>
 
       <div className="page page-3">
@@ -307,7 +314,9 @@ export function usePrefetchOnIntent<T extends HTMLElement>(prefetch: () => void)
       controller.abort(); // 👇 prefetch once, then remove all listeners
       prefetch();
     };
-    const start = () => { timer = setTimeout(run, INTENT_DELAY_MS); };
+    const start = () => {
+      timer = setTimeout(run, INTENT_DELAY_MS);
+    };
 
     element.addEventListener("mouseenter", start, { signal });
     element.addEventListener("focus", start, { signal });
@@ -331,7 +340,7 @@ export function usePrefetchOnIntent<T extends HTMLElement>(prefetch: () => void)
 
 Manche Links sind auch ohne Hover wahrscheinlich, etwa der "Nächste Seite"-Link einer Liste. Diese kannst du vorab abrufen, wenn der Browser nichts anderes zu tun hat. `requestIdleCallback` führt ein Callback aus, wenn der Hauptthread im Leerlauf ist. Gib ihm ein `timeout` mit, sonst wartet das Callback unter Umständen sekundenlang. Safari aktiviert es standardmässig noch nicht (nur hinter einem Flag), nimm dort `setTimeout` als Fallback.
 
-Kombiniere beide Bedingungen: Rufe einen Link nur vorab ab, wenn er im Viewport ist *und* der Browser im Leerlauf ist. Beobachte den Link mit einem `IntersectionObserver`. Kommt er in den Viewport, plane das Prefetching mit `requestIdleCallback` ein. Verlässt er den Viewport, bevor das Callback gelaufen ist, brich es mit `cancelIdleCallback` ab. So löst ein Benutzer, der schnell durch eine lange Liste scrollt, nicht für jeden Link unterwegs ein Prefetching aus.
+Kombiniere beide Bedingungen: Rufe einen Link nur vorab ab, wenn er im Viewport ist _und_ der Browser im Leerlauf ist. Beobachte den Link mit einem `IntersectionObserver`. Kommt er in den Viewport, plane das Prefetching mit `requestIdleCallback` ein. Verlässt er den Viewport, bevor das Callback gelaufen ist, brich es mit `cancelIdleCallback` ab. So löst ein Benutzer, der schnell durch eine lange Liste scrollt, nicht für jeden Link unterwegs ein Prefetching aus.
 
 Doku: [MDN: requestIdleCallback](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
 
@@ -348,10 +357,12 @@ Der Browser kann das für dich übernehmen. Mit der Speculation Rules API beschr
 ```html
 <script type="speculationrules">
   {
-    "prefetch": [{
-      "where": { "href_matches": "/items/*" },
-      "eagerness": "moderate"
-    }]
+    "prefetch": [
+      {
+        "where": { "href_matches": "/items/*" },
+        "eagerness": "moderate"
+      }
+    ]
   }
 </script>
 ```
@@ -362,8 +373,8 @@ Doku: [MDN: Speculation Rules API](https://developer.mozilla.org/en-US/docs/Web/
 
 ## Zusammenfassung
 
-* Lade nur, was der Benutzer jetzt braucht. Schiebe den Rest auf, bis er gleich in den Viewport kommt.
-* Nutze für Bilder und iframes `loading="lazy"`, aber nie für Inhalte, die beim ersten Laden sichtbar sind.
-* Erkenne für Komponenten und Daten den Viewport mit dem `IntersectionObserver` (oder `react-intersection-observer`) und lade den Code mit `lazy` innerhalb einer `<Suspense>`-Boundary.
-* Reserviere den Platz für Lazy-Inhalte mit Abmessungen oder Skeletons, damit die Seite nicht springt.
-* Rufe den nächsten Schritt bei erkannter Absicht oder im Leerlauf des Browsers vorab ab, nicht alles auf einmal, und miss, ob es hilft.
+- Lade nur, was der Benutzer jetzt braucht. Schiebe den Rest auf, bis er gleich in den Viewport kommt.
+- Nutze für Bilder und iframes `loading="lazy"`, aber nie für Inhalte, die beim ersten Laden sichtbar sind.
+- Erkenne für Komponenten und Daten den Viewport mit dem `IntersectionObserver` (oder `react-intersection-observer`) und lade den Code mit `lazy` innerhalb einer `<Suspense>`-Boundary.
+- Reserviere den Platz für Lazy-Inhalte mit Abmessungen oder Skeletons, damit die Seite nicht springt.
+- Rufe den nächsten Schritt bei erkannter Absicht oder im Leerlauf des Browsers vorab ab, nicht alles auf einmal, und miss, ob es hilft.

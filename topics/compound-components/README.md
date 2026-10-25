@@ -6,10 +6,10 @@
 
 ## Inhalt
 
-* [Was sind Compound Components?](#was-sind-compound-components)
-* [Das Problem](#das-problem)
-* [Die Lösung](#die-lösung)
-* [Beispiel: Accordion](#beispiel-accordion)
+- [Was sind Compound Components?](#was-sind-compound-components)
+- [Das Problem](#das-problem)
+- [Die Lösung](#die-lösung)
+- [Beispiel: Accordion](#beispiel-accordion)
 
 ## Was sind Compound Components?
 
@@ -46,23 +46,26 @@ Schauen wir uns verschiedene Arten der Implementierung an.
 function Example() {
   const menuConfig = {
     menuButton: {
-      text: "Menu",
+      text: "Menu"
     },
-    menuList: [{
-      kind: "item",
-      text: "Download",
-      onClick: () => { /* ... */ }
-    }, {
-      kind: "link",
-      text: "Show details",
-      href: "/details"
-    }],
-    closeOnItemClick: true,
+    menuList: [
+      {
+        kind: "item",
+        text: "Download",
+        onClick: () => {
+          /* ... */
+        }
+      },
+      {
+        kind: "link",
+        text: "Show details",
+        href: "/details"
+      }
+    ],
+    closeOnItemClick: true
   };
 
-  return (
-    <Menu {...menuConfig} />
-  );
+  return <Menu {...menuConfig} />;
 }
 ```
 
@@ -90,23 +93,28 @@ function Example() {
 
   const menuConfig = {
     menuButton: {
-      text: "Menu",
+      text: "Menu"
     },
-    menuList: [{
-      kind: "item",
-      text: "Download",
-      onClick: () => { /* ... */ }
-    }].concat(links.map(link => ({ // Data has to be mapped to the structure of the config
-      kind: "link",
-      text: link.title,
-      href: link.target
-    }))),
-    closeOnItemClick: true,
+    menuList: [
+      {
+        kind: "item",
+        text: "Download",
+        onClick: () => {
+          /* ... */
+        }
+      }
+    ].concat(
+      links.map((link) => ({
+        // Data has to be mapped to the structure of the config
+        kind: "link",
+        text: link.title,
+        href: link.target
+      }))
+    ),
+    closeOnItemClick: true
   };
 
-  return (
-    <Menu {...menuConfig} />
-  );
+  return <Menu {...menuConfig} />;
 }
 ```
 
@@ -118,16 +126,16 @@ function Example() {
 
   const open = () => {
     setIsOpen(true);
-  }
+  };
 
   const close = () => {
     setIsOpen(false);
-  }
+  };
 
   const download = () => {
     // Download stuff ...
     close();
-  }
+  };
 
   // Data that comes from an API or is passed in as props
   const links = [
@@ -140,8 +148,10 @@ function Example() {
       <MenuButton onClick={open}>Menu</MenuButton>
       <MenuList>
         <MenuItem onClick={download}>Download</MenuItem>
-        {links.map(link => (
-          <MenuLink key={link.target} to={link.target} onClick={close}>{link.title}</MenuLink>
+        {links.map((link) => (
+          <MenuLink key={link.target} to={link.target} onClick={close}>
+            {link.title}
+          </MenuLink>
         ))}
       </MenuList>
     </Menu>
@@ -169,7 +179,7 @@ Der State, den wir nicht selbst verwalten wollen, liegt in der `<Menu>`-Komponen
 function Example() {
   const download = () => {
     // Download stuff ...
-  }
+  };
 
   return (
     <Menu closeOnItemClick>
@@ -197,7 +207,7 @@ Doku: [react.dev: createContext](https://react.dev/reference/react/createContext
 
 **Hilfreiche Links**
 
-* [Passing Data Deeply with Context](https://react.dev/learn/passing-data-deeply-with-context)
+- [Passing Data Deeply with Context](https://react.dev/learn/passing-data-deeply-with-context)
 
 ## Beispiel: Accordion
 
@@ -218,10 +228,7 @@ function App() {
               Section {id} {isActive ? "(active)" : null}
             </Accordion.Toggle>
             <Accordion.Panel>
-              <p>
-                Lorem ipsum dolor sit amet consectetur adipisicing elit.
-                Magnam, voluptatum.
-              </p>
+              <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Magnam, voluptatum.</p>
             </Accordion.Panel>
           </>
         )}
@@ -229,19 +236,13 @@ function App() {
       <Accordion.Item id="2">
         <Accordion.Toggle>Section 2</Accordion.Toggle>
         <Accordion.Panel>
-          <p>
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Magnam,
-            voluptatum.
-          </p>
+          <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Magnam, voluptatum.</p>
         </Accordion.Panel>
       </Accordion.Item>
       <Accordion.Item id="3">
         <Accordion.Toggle>Section 3</Accordion.Toggle>
         <Accordion.Panel>
-          <p>
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Magnam,
-            voluptatum.
-          </p>
+          <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Magnam, voluptatum.</p>
         </Accordion.Panel>
       </Accordion.Item>
     </Accordion>
@@ -254,30 +255,30 @@ function App() {
 ```jsx
 function App() {
   // The data can come from anywhere and be used in any structure
-  const data = [{
-    id: "1",
-    title: "Section 1",
-    description: (<p>Lorem ipsum 1</p>)
-  }, {
-    id: "2",
-    title: "Section 2",
-    description: (<p>Lorem ipsum 2</p>)
-  }, {
-    id: "3",
-    title: "Section 3",
-    description: (<p>Lorem ipsum 3</p>)
-  }];
+  const data = [
+    {
+      id: "1",
+      title: "Section 1",
+      description: <p>Lorem ipsum 1</p>
+    },
+    {
+      id: "2",
+      title: "Section 2",
+      description: <p>Lorem ipsum 2</p>
+    },
+    {
+      id: "3",
+      title: "Section 3",
+      description: <p>Lorem ipsum 3</p>
+    }
+  ];
 
   return (
     <Accordion multiple>
-      {data.map(entry => (
+      {data.map((entry) => (
         <Accordion.Item key={entry.id} id={entry.id}>
-          <Accordion.Toggle>
-            {entry.title}
-          </Accordion.Toggle>
-          <Accordion.Panel>
-            {entry.description}
-          </Accordion.Panel>
+          <Accordion.Toggle>{entry.title}</Accordion.Toggle>
+          <Accordion.Panel>{entry.description}</Accordion.Panel>
         </Accordion.Item>
       ))}
     </Accordion>
@@ -291,6 +292,6 @@ function App() {
 
 **Hilfreiche Links**
 
-* [React Hooks: Compound Components](https://kentcdodds.com/blog/compound-components-with-react-hooks)
-* [Passing data with a render prop](https://react.dev/reference/react/cloneElement#passing-data-with-a-render-prop)
-* [Advanced React Component Patterns : Render Props](https://medium.com/@pramonowang/advanced-react-component-patterns-render-props-a9d61376a8fb)
+- [React Hooks: Compound Components](https://kentcdodds.com/blog/compound-components-with-react-hooks)
+- [Passing data with a render prop](https://react.dev/reference/react/cloneElement#passing-data-with-a-render-prop)
+- [Advanced React Component Patterns : Render Props](https://medium.com/@pramonowang/advanced-react-component-patterns-render-props-a9d61376a8fb)

@@ -187,14 +187,14 @@ type Project {
 
 Das ist die ganze Idee: **Der Client bestimmt, welche Felder zurückkommen.** Ein paar weitere Begriffe, übersetzt in REST:
 
-| GraphQL | In REST hiesse das | Bedeutung |
-| --- | --- | --- |
-| **Schema** | Ein OpenAPI-Dokument | Jeder Typ und jedes Feld, das die API anbietet |
-| **Typ**, etwa `Project` | Die Form eines JSON-Bodys | Eine benannte Form |
-| **Feld auf `Query`** | Ein Endpoint, `GET /projects/:name` | Ein Einstiegspunkt zum Lesen |
-| **Query** | Ein `GET`-Request | Ein Lesezugriff, der die gewünschten Felder auflistet |
-| **Mutation** | `POST`, `PUT`, `DELETE` | Ein Schreibzugriff, der ebenfalls die angefragten Felder zurückgibt |
-| **Resolver** | Ein Route Handler | Die Serverfunktion hinter einem Feld |
+| GraphQL                 | In REST hiesse das                  | Bedeutung                                                           |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------- |
+| **Schema**              | Ein OpenAPI-Dokument                | Jeder Typ und jedes Feld, das die API anbietet                      |
+| **Typ**, etwa `Project` | Die Form eines JSON-Bodys           | Eine benannte Form                                                  |
+| **Feld auf `Query`**    | Ein Endpoint, `GET /projects/:name` | Ein Einstiegspunkt zum Lesen                                        |
+| **Query**               | Ein `GET`-Request                   | Ein Lesezugriff, der die gewünschten Felder auflistet               |
+| **Mutation**            | `POST`, `PUT`, `DELETE`             | Ein Schreibzugriff, der ebenfalls die angefragten Felder zurückgibt |
+| **Resolver**            | Ein Route Handler                   | Die Serverfunktion hinter einem Feld                                |
 
 **Jede Query und jede Mutation geht an dieselbe URL**, meist als `POST /graphql` mit der Query und ihren Variablen im JSON-Body. `!` bedeutet im Schema "nie null", `[User]` ist eine Liste.
 
@@ -246,16 +246,29 @@ Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` und `$tagIds`
 query ProductTypePage($id: ID!, $tagIds: [ID!]) {
   productType(id: $id) {
     name
-    breadcrumb { name }
-    navigation { name url }
+    breadcrumb {
+      name
+    }
+    navigation {
+      name
+      url
+    }
     products(tagIds: $tagIds, first: 48) {
       totalCount
       items {
         name
-        brand { name }
-        price { amount currency }
+        brand {
+          name
+        }
+        price {
+          amount
+          currency
+        }
         imageUrl
-        rating { average count }
+        rating {
+          average
+          count
+        }
       }
     }
   }
@@ -271,7 +284,9 @@ query ProductTypePage($id: ID!, $tagIds: [ID!]) {
     "productType": {
       "name": "Audio connectors",
       "breadcrumb": [{ "name": "IT + Multimedia" } /* ... */],
-      "navigation": [{ "name": "Audio player accessories", "url": "/en/s1/producttype/2918" } /* ... */],
+      "navigation": [
+        { "name": "Audio player accessories", "url": "/en/s1/producttype/2918" } /* ... */
+      ],
       "products": {
         "totalCount": 1211,
         "items": [
@@ -302,7 +317,9 @@ Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **F�
 
 ```json
 {
-  "data": { "productType": { "name": "Audio connectors", "products": { "totalCount": 1211, "items": null } } },
+  "data": {
+    "productType": { "name": "Audio connectors", "products": { "totalCount": 1211, "items": null } }
+  },
   "errors": [{ "message": "Products unavailable", "path": ["productType", "products", "items"] }]
 }
 ```
@@ -327,20 +344,24 @@ Im Code sehen die Resolver für unsere Seite so aus. Jeder Resolver bekommt das 
 const resolvers = {
   Query: {
     // 👇 Team A: one call returns name, breadcrumb and navigation as well
-    productType: (_parent, args, context) => context.teamA.getProductType(args.id),
+    productType: (_parent, args, context) => context.teamA.getProductType(args.id)
   },
   ProductType: {
     products: (productType, args, context) =>
-      context.teamB.getProductList({ productTypeId: productType.id, tagIds: args.tagIds, limit: args.first }),
+      context.teamB.getProductList({
+        productTypeId: productType.id,
+        tagIds: args.tagIds,
+        limit: args.first
+      })
   },
   ProductList: {
     // 👇 Team B returns ids only, so fetch all 48 products from Team C in one call
-    items: (list, _args, context) => context.teamC.getProducts(list.productIds),
+    items: (list, _args, context) => context.teamC.getProducts(list.productIds)
   },
   Product: {
     // a resolver that calls nothing: the schema offers one image, the service returns a list
-    imageUrl: (product) => product.images[0],
-  },
+    imageUrl: (product) => product.images[0]
+  }
 };
 ```
 
@@ -372,7 +393,8 @@ export function createBrandLoader(teamC: TeamCApi) {
 }
 
 // resolver for Product.brand, with the loader in the context
-const brand = (product: Product, _args: unknown, context: Context) => context.brandLoader.load(product.brandId);
+const brand = (product: Product, _args: unknown, context: Context) =>
+  context.brandLoader.load(product.brandId);
 ```
 
 Die Batch-Funktion muss pro Key ein Resultat zurückgeben, in derselben Reihenfolge wie die Keys.
@@ -406,10 +428,18 @@ import { graphql, type FragmentType, getFragmentData } from "./gql";
 export const ProductTileFragment = graphql(`
   fragment ProductTile_product on Product {
     name
-    brand { name }
-    price { amount currency }
+    brand {
+      name
+    }
+    price {
+      amount
+      currency
+    }
     imageUrl
-    rating { average count }
+    rating {
+      average
+      count
+    }
   }
 `);
 
@@ -422,7 +452,9 @@ export function ProductTile(props: ProductTileProps) {
     <article>
       <img src={product.imageUrl} alt="" />
       <p>{product.price.amount.toFixed(2)}</p>
-      <h3><strong>{product.brand.name}</strong> {product.name}</h3>
+      <h3>
+        <strong>{product.brand.name}</strong> {product.name}
+      </h3>
       <Rating average={product.rating?.average} count={product.rating?.count} />
     </article>
   );
@@ -447,8 +479,10 @@ export const ProductListFragment = graphql(`
 `);
 
 // in ProductList, after unmasking its own fragment
-<h2>{productType.products.totalCount} products</h2>
-{productType.products.items?.map((item) => <ProductTile key={item.id} product={item} />)}
+<h2>{productType.products.totalCount} products</h2>;
+{
+  productType.products.items?.map((item) => <ProductTile key={item.id} product={item} />);
+}
 ```
 
 `ProductTypePage`, die Seitenkomponente von Team A, setzt nur die Fragments ihrer direkten Kinder zusammen:
@@ -513,14 +547,14 @@ Doku: [JSON:API: Inclusion of Related Resources](https://jsonapi.org/format/#fet
 
 GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
 
-| Thema | REST | GraphQL |
-| --- | --- | --- |
-| **Caching** | Die URL ist der Cache-Key. Browser und CDNs (geteilte Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Eine **Persisted Query** hilft: ein `GET` mit einer kurzen ID für eine Query, die der Server schon kennt. |
-| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP. | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP. |
-| **Fehler** | Ein Statuscode pro Request. | Ein fehlgeschlagenes Feld liefert meist trotzdem `200`, solange `data` Daten enthält. Monitoring, das Statuscodes zählt, verpasst es. |
-| **Autorisierung** | Wird in jedem Route Handler geprüft. | Viele Queries erreichen dasselbe Feld, also prüfst du Berechtigungen einmal, im Code, den die Resolver aufrufen. |
-| **Teure Queries** | Jeder Request ist im Voraus bekannt. | Clients schreiben ihre eigenen: 48 Produkte mit je 60 Spezifikationen und 50 Reviews. Server begrenzen Tiefe und Kosten. |
-| **Betrieb** | `fetch` und Express. | Ein Schema, ein Server, den ein Team betreibt, Codegen, Schema-Checks im CI. |
+| Thema             | REST                                                                                                                            | GraphQL                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs (geteilte Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Eine **Persisted Query** hilft: ein `GET` mit einer kurzen ID für eine Query, die der Server schon kennt. |
+| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                                                             | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                                             |
+| **Fehler**        | Ein Statuscode pro Request.                                                                                                     | Ein fehlgeschlagenes Feld liefert meist trotzdem `200`, solange `data` Daten enthält. Monitoring, das Statuscodes zählt, verpasst es.                            |
+| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                                                            | Viele Queries erreichen dasselbe Feld, also prüfst du Berechtigungen einmal, im Code, den die Resolver aufrufen.                                                 |
+| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                                                            | Clients schreiben ihre eigenen: 48 Produkte mit je 60 Spezifikationen und 50 Reviews. Server begrenzen Tiefe und Kosten.                                         |
+| **Betrieb**       | `fetch` und Express.                                                                                                            | Ein Schema, ein Server, den ein Team betreibt, Codegen, Schema-Checks im CI.                                                                                     |
 
 Doku: [Best Practices](https://graphql.org/learn/best-practices/), [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
 
@@ -544,12 +578,12 @@ Was nutzt also ein grosser Shop? **Beides, jeweils dort, wo es passt.** Im Hinte
 
 Ein einzelner GraphQL-Server, der 30 Services aufruft, **wird selbst zum Flaschenhals**: Jedes neue Feld braucht das Team, das ihn betreibt. Grosse Firmen teilen den Graphen deshalb oft auf, sodass jedes Team seinen Teil des Schemas betreibt und ein Gateway die Teile zu einem zusammenfügt. Das nennt sich **Federation**.
 
-| Situation | Einsatz |
-| --- | --- |
-| Ein Team, eine App, eine Handvoll Ressourcen | REST |
-| Öffentliche Daten, die ein CDN cachen soll, Datei-Uploads, Login-Redirects, Webhooks, Partner-APIs | REST |
-| Eine Seite oder mehrere Clients, die Daten aus vielen Services kombinieren | GraphQL |
-| Viele Teams, die Teile derselben Seite bauen | GraphQL mit Fragments |
+| Situation                                                                                          | Einsatz               |
+| -------------------------------------------------------------------------------------------------- | --------------------- |
+| Ein Team, eine App, eine Handvoll Ressourcen                                                       | REST                  |
+| Öffentliche Daten, die ein CDN cachen soll, Datei-Uploads, Login-Redirects, Webhooks, Partner-APIs | REST                  |
+| Eine Seite oder mehrere Clients, die Daten aus vielen Services kombinieren                         | GraphQL               |
+| Viele Teams, die Teile derselben Seite bauen                                                       | GraphQL mit Fragments |
 
 Doku: [graphql.org: Federation](https://graphql.org/learn/federation/)
 
