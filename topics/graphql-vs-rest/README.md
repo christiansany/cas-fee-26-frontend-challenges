@@ -309,6 +309,8 @@ Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **F�
 
 Der HTTP-Statuscode ist hier trotzdem `200`, also **prüf `errors` selbst**.
 
+Aus der Praxis: Der GraphQL-Layer selbst steht selten im Weg, aber **die Fehlerbehandlung wird aufwändiger**. Alles kann klappen, alles kann schiefgehen, und dazwischen liegen viele mögliche Teilantworten. Für jede davon braucht die Seite ein sinnvolles Verhalten.
+
 Doku: [Variablen](https://graphql.org/learn/queries/#variables), [Response](https://graphql.org/learn/response/)
 
 ### Resolver: wie der Server die Daten sammelt
@@ -501,6 +503,8 @@ JSON:API nennt das **Inclusion of Related Resources**, Stripe nennt es **Expandi
 - **Die Daten müssen dort verknüpfbar sein.** Der Service von Team B kann Produkte nur einbetten, wenn er an die Daten von Team C herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
 - **Jeder Endpoint implementiert es neu.** Jede Response, die Produkte einbettet, und tiefere Daten wie `include=products.brand`, muss die Verknüpfung selbst machen.
 
+Ein Beispiel aus der Praxis: Bei den Kommentaren eines Blogposts haben wir die Antworten auf jeden Kommentar per `include` mitgeladen, also eine verschachtelte Pagination in einem Call. Die Benutzerdaten zu den Kommentaren kamen aber nicht mit, dafür brauchte es einen weiteren API-Call pro Kommentar. **Der Gewinn war bescheiden.**
+
 **GraphQL macht das einmal, in den Resolvern, und jede Query kann es nutzen.**
 
 Doku: [JSON:API: Inclusion of Related Resources](https://jsonapi.org/format/#fetching-includes), [Stripe: Expanding Responses](https://docs.stripe.com/expand)
@@ -551,8 +555,10 @@ Doku: [graphql.org: Federation](https://graphql.org/learn/federation/)
 
 ## Zusammenfassung
 
-Eine Seite in einer grossen Applikation bezieht ihre Daten aus vielen Services, die verschiedenen Teams gehören. Mit REST **lädt der Browser sie in einem Wasserfall**: Er folgt Links von einer API zur nächsten, bekommt Felder, die er nie anzeigt, und braucht trotzdem weitere Requests für die Felder, die er anzeigt. `?include=` bettet verwandte Daten ein, aber nur, wo der Service sie verknüpfen kann, ohne das Over-Fetching zu beheben, und in jedem Endpoint von Neuem.
-
-**GraphQL verknüpft die Daten an einem Ort, auf dem Server.** Das Schema beschreibt alle Daten als einen Graphen, die Seite fragt in einem Request genau ihre Felder an, und Resolver auf dem Server holen jedes Stück beim Service, dem es gehört. Den Wasserfall gibt es weiterhin, aber er läuft im Rechenzentrum, wo ein Aufruf Millisekunden dauert. Mit Fragments deklariert jede Komponente ihre eigenen Felder, und Data Masking verhindert, dass Teams von den Feldern anderer Teams abhängen.
-
-GraphQL kostet, was REST gratis mitbringt: Caching über die URL, gewöhnliche HTTP-Features, ehrliche Statuscodes und einen Server, den jemand betreiben muss. **Deshalb nutzen grosse Websites beides:** GraphQL für die Daten hinter ihren Seiten, REST an den Rändern.
+- Mit REST lädt der Browser die Seite **in einem Wasserfall** und bekommt gleichzeitig zu viele und zu wenige Daten.
+- `?include=` hilft nur teilweise: Over-Fetching bleibt meist, die Daten müssen im Service verknüpfbar sein, und jeder Endpoint setzt es neu um.
+- **GraphQL verknüpft die Daten auf dem Server:** Die Seite fragt in einem Request genau ihre Felder an, Resolver holen sie bei den Services der Teams.
+- Den Wasserfall gibt es weiterhin, aber er läuft im Rechenzentrum.
+- Mit Fragments deklariert jede Komponente ihre Felder, Data Masking hält die Teams unabhängig.
+- GraphQL kostet, was REST gratis mitbringt: Caching über die URL, HTTP-Features, ehrliche Statuscodes. Dazu kommen aufwändigere Fehlerbehandlung bei Teilantworten und ein Server, den jemand betreiben muss.
+- **Grosse Websites nutzen beides:** GraphQL für die Daten hinter ihren Seiten, REST an den Rändern.
