@@ -237,46 +237,30 @@ type Product {
 
 Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` und `$tagIds` sind **Variablen**: Ihre Werte reisen als JSON neben der Query mit, wie Routenparameter.
 
-<table>
-<tr><th>Query</th><th>Response</th></tr>
-<tr>
-<td>
+**Query**
 
+<!-- prettier-ignore -->
 ```graphql
 query ProductTypePage($id: ID!, $tagIds: [ID!]) {
   productType(id: $id) {
     name
-    breadcrumb {
-      name
-    }
-    navigation {
-      name
-      url
-    }
+    breadcrumb { name }
+    navigation { name url }
     products(tagIds: $tagIds, first: 48) {
       totalCount
       items {
         name
-        brand {
-          name
-        }
-        price {
-          amount
-          currency
-        }
+        brand { name }
+        price { amount currency }
         imageUrl
-        rating {
-          average
-          count
-        }
+        rating { average count }
       }
     }
   }
 }
 ```
 
-</td>
-<td>
+**Response**
 
 ```jsonc
 {
@@ -304,10 +288,6 @@ query ProductTypePage($id: ID!, $tagIds: [ID!]) {
   }
 }
 ```
-
-</td>
-</tr>
-</table>
 
 Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **Für den Browser sind Over-Fetching und Under-Fetching weg.**
 
@@ -478,10 +458,16 @@ export const ProductListFragment = graphql(`
   }
 `);
 
-// in ProductList, after unmasking its own fragment
-<h2>{productType.products.totalCount} products</h2>;
-{
-  productType.products.items?.map((item) => <ProductTile key={item.id} product={item} />);
+export function ProductList(props: ProductListProps) {
+  const productType = getFragmentData(ProductListFragment, props.productType);
+  return (
+    <>
+      <h2>{productType.products.totalCount} products</h2>
+      {productType.products.items?.map((item) => (
+        <ProductTile key={item.id} product={item} />
+      ))}
+    </>
+  );
 }
 ```
 
