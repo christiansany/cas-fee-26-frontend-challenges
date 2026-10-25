@@ -1,25 +1,25 @@
-# Lists, filters and pagination
+# Listen, Filter und Pagination
 
-> You filter a list, open an item, press back, and your filters are gone. In this topic we make the URL the single source of truth for a list: controls write the URL, one place reads it, and the list renders what that returns. Reload, shared links and the back button then work for free. We also keep the old list on screen while the next one loads, and see why large lists page with cursors instead of page numbers.
+> Du filterst eine Liste, öffnest einen Eintrag, drückst Zurück, und die Filter sind weg. In diesem Thema machen wir die URL zur Single Source of Truth für eine Liste: Controls schreiben die URL, eine Stelle liest sie, und die Liste rendert, was diese Stelle zurückgibt. Reload, geteilte Links und der Zurück-Button funktionieren dann ohne zusätzlichen Code. Ausserdem lassen wir die alte Liste stehen, während die nächste lädt, und sehen, warum grosse Listen mit Cursors statt Seitenzahlen paginieren.
 
-**Duration:** about 30 minutes
+**Dauer:** etwa 30 Minuten
 
-## Contents
+## Inhalt
 
-- [Where you are coming from](#where-you-are-coming-from)
-- [The URL as the single source of truth](#the-url-as-the-single-source-of-truth)
-- [What belongs in the URL](#what-belongs-in-the-url)
-- [Push or replace](#push-or-replace)
-- [URL state with nuqs](#url-state-with-nuqs)
-- [Keeping the old list visible while loading](#keeping-the-old-list-visible-while-loading)
-- [Offset or cursor pagination](#offset-or-cursor-pagination)
-- ["Load more" that survives the back button](#load-more-that-survives-the-back-button)
-- [Takeaways](#takeaways)
-- [Further reading](#further-reading)
+- [Ausgangslage](#ausgangslage)
+- [Die URL als Single Source of Truth](#die-url-als-single-source-of-truth)
+- [Was in die URL gehört](#was-in-die-url-gehört)
+- [Push oder Replace](#push-oder-replace)
+- [URL-State mit nuqs](#url-state-mit-nuqs)
+- [Die alte Liste beim Laden sichtbar halten](#die-alte-liste-beim-laden-sichtbar-halten)
+- [Offset- oder Cursor-Pagination](#offset--oder-cursor-pagination)
+- ["Load more", das den Zurück-Button übersteht](#load-more-das-den-zurück-button-übersteht)
+- [Das Wichtigste](#das-wichtigste)
+- [Weiterführende Links](#weiterführende-links)
 
-## Where you are coming from
+## Ausgangslage
 
-In Project 2 you probably built a list with a search box and a filter or two, kept in `useState`:
+Eine typische Liste hat ein Suchfeld und ein, zwei Filter, gespeichert in `useState`:
 
 ```tsx
 // 👇 lives in memory only: gone on reload, unknown to a shared link
@@ -27,99 +27,103 @@ const [category, setCategory] = useState<string | null>(null);
 const [page, setPage] = useState(1);
 ```
 
-It works until the user does something ordinary:
+Das funktioniert, bis jemand etwas Alltägliches tut:
 
-| The user...                         | What they get                   |
-| ----------------------------------- | ------------------------------- |
-| reloads the page                    | page 1, no filters              |
-| sends the link to a colleague       | a different list                |
-| opens an item and presses back      | an unfiltered list, at the top  |
+| Wer...                                  | bekommt                              |
+| --------------------------------------- | ------------------------------------ |
+| die Seite neu lädt                      | Seite 1, keine Filter                |
+| den Link an eine Kollegin schickt       | eine andere Liste                    |
+| einen Eintrag öffnet und Zurück drückt  | eine ungefilterte Liste, ganz oben   |
 
-Now picture the Lending Desk grown into a company-wide platform with millions of items. People share filtered lists in chat, and search engines index category pages.
+Stell dir jetzt vor, der Lending Desk ist zu einer firmenweiten Plattform mit Millionen von Einträgen gewachsen. Leute teilen gefilterte Listen im Chat, und Suchmaschinen indexieren Kategorieseiten.
 
-## The URL as the single source of truth
+## Die URL als Single Source of Truth
 
-A **single source of truth** is the one place that holds a value; everything else reads it. For a list, that place is the URL:
+Eine **Single Source of Truth** ist die eine Stelle, die einen Wert hält; alles andere liest ihn von dort. Bei einer Liste ist diese Stelle die URL:
 
 ```text
 /items?q=drill&category=tools&sort=newest&page=2
 ```
 
-The browser already keeps URLs across reload, sharing and the back button. Put the list state there, and all three work without extra code.
+Der Browser behält URLs schon bei Reload, beim Teilen und beim Zurück-Button. Liegt der State der Liste dort, funktionieren alle drei ohne zusätzlichen Code.
 
-A common first attempt keeps the filters in `useState` and syncs them with the URL in two effects. Now two places hold the same value and copy it back and forth: double fetches, flickering inputs, sometimes an endless loop.
+Ein häufiger erster Versuch hält die Filter in `useState` und synchronisiert sie in zwei Effects mit der URL. Dann halten zwei Stellen denselben Wert und kopieren ihn hin und her: doppelte Fetches, flackernde Inputs, manchmal eine Endlosschleife.
 
-**Two sources of truth:**
-
-```mermaid
-flowchart LR
-  State["useState: filters"] -- "effect copies" --> URL["URL"]
-  URL -- "effect copies back" --> State
-  State -- "fetch" --> API["Catalogue API"]
-  URL -- "double fetch" --> API
-```
-
-**One source of truth:**
+**Zwei Sources of Truth:**
 
 ```mermaid
 flowchart LR
-  Controls["Controls: search, filters, page"] -- "write" --> URL["URL: ?category=tools&page=2"]
-  URL -- "read" --> Page["One place: the list page"]
-  Page -- "fetch" --> API["Catalogue API"]
-  API -- "items" --> Page
-  Page -- "render" --> List["List"]
+  State["useState: Filter"] -- "Effect kopiert" --> URL["URL"]
+  URL -- "Effect kopiert zurück" --> State
+  State -- "Fetch" --> API["Katalog-API"]
+  URL -- "doppelter Fetch" --> API
 ```
 
-Data flows in one direction. Controls write the URL and read their current value from it. Only the list page loads data.
+**Eine Source of Truth:**
 
-## What belongs in the URL
+```mermaid
+flowchart LR
+  Controls["Controls: Suche, Filter, Seite"] -- "schreiben" --> URL["URL: ?category=tools&page=2"]
+  URL -- "lesen" --> Page["Eine Stelle: die Listenseite"]
+  Page -- "Fetch" --> API["Katalog-API"]
+  API -- "Einträge" --> Page
+  Page -- "rendern" --> List["Liste"]
+```
 
-Ask one question: "If someone opens this link, should they see the same thing?"
+![Die URL als einzige Quelle der Filter](./assets/url-single-source.png)
 
-| In the URL: changes **what data** you show | In React state: changes **how the UI looks** |
-| ------------------------------------------- | -------------------------------------------- |
-| Search text                                 | Hover and focus                              |
-| Filters, such as category or price range    | Whether a dropdown is open                   |
-| Sort order                                  | Text typed but not yet sent                  |
-| Page, or how many items are loaded          | Tooltips, animations, toasts                 |
+Die Daten fliessen in eine Richtung. Controls schreiben die URL und lesen ihren aktuellen Wert aus ihr. Daten lädt allein die Listenseite.
 
-URLs come from outside your app: people edit them and bots send garbage. Give every key a default, and treat `?page=banana` or `?sort=<script>` as the default instead of crashing.
+## Was in die URL gehört
 
-## Push or replace
+Eine Frage entscheidet: "Wenn jemand diesen Link öffnet, soll er dasselbe sehen?"
 
-A control changes the URL with the History API. `history.pushState` and `history.replaceState` both change the URL without loading a page; your app stays and re-renders. They differ in what they do to the browser's history, the stack of entries that back walks through:
+| In die URL: ändert, **welche Daten** du zeigst | In React-State: ändert, **wie das UI aussieht** |
+| ---------------------------------------------- | ----------------------------------------------- |
+| Suchtext                                       | Hover und Fokus                                 |
+| Filter, etwa Kategorie oder Preisspanne        | Ob ein Dropdown offen ist                       |
+| Sortierung                                     | Getippter, noch nicht abgeschickter Text        |
+| Seite oder Anzahl geladener Einträge           | Tooltips, Animationen, Toasts                   |
+
+URLs kommen von ausserhalb deiner App: Leute bearbeiten sie von Hand, und Bots schicken Unsinn. Gib jedem Key einen Default und behandle `?page=banana` oder `?sort=<script>` als Default, statt abzustürzen.
+
+## Push oder Replace
+
+Ein Control ändert die URL über die History API. `history.pushState` und `history.replaceState` ändern beide die URL, ohne eine Seite zu laden; deine App bleibt stehen und rendert neu. Sie unterscheiden sich darin, was sie mit der Browser-History machen, dem Stapel von Einträgen, durch den Zurück geht:
 
 ```mermaid
 flowchart TB
-  subgraph Start["Start: back goes to /"]
+  subgraph Start["Start: Zurück führt zu /"]
     direction LR
     s1["/"] --> s2["/items"]
   end
-  subgraph Push["pushState ?category=tools: back goes to /items"]
+  subgraph Push["pushState ?category=tools: Zurück führt zu /items"]
     direction LR
     p1["/"] --> p2["/items"] --> p3["/items?category=tools"]
   end
-  subgraph Replace["replaceState ?q=drill: back goes to /"]
+  subgraph Replace["replaceState ?q=drill: Zurück führt zu /"]
     direction LR
     r1["/"] --> r2["/items?q=drill"]
   end
   Start ~~~ Push ~~~ Replace
 ```
 
-Choose the method by what "back" should mean:
+![History-Einträge mit pushState und replaceState](./assets/history-push-replace.png)
 
-| Method                 | Browser history              | Use for                                                           |
-| ---------------------- | ---------------------------- | ----------------------------------------------------------------- |
-| `history.pushState`    | adds an entry on top         | a category, the sort order, a page number: back undoes the choice |
-| `history.replaceState` | swaps the top entry          | typing, a slider, "load more": back leaves the list               |
+Wähle die Methode danach, was "Zurück" bedeuten soll:
 
-Docs: [pushState](https://developer.mozilla.org/en-US/docs/Web/API/History/pushState), [replaceState](https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState)
+| Methode                | Browser-History               | Verwenden für                                                          |
+| ---------------------- | ----------------------------- | ---------------------------------------------------------------------- |
+| `history.pushState`    | legt einen Eintrag obendrauf  | eine Kategorie, die Sortierung, eine Seitenzahl: Zurück macht die Wahl rückgängig |
+| `history.replaceState` | ersetzt den obersten Eintrag  | Tippen, einen Slider, "Load more": Zurück verlässt die Liste           |
 
-## URL state with nuqs
+Doku: [pushState](https://developer.mozilla.org/en-US/docs/Web/API/History/pushState), [replaceState](https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState)
 
-A URL holds only strings, and your components want typed values. **nuqs** is a small library with `useState`-like hooks backed by the URL. Back and forward update them automatically.
+## URL-State mit nuqs
 
-Wrap the app once in the adapter for plain React:
+Eine URL enthält nur Strings, deine Komponenten wollen typisierte Werte. **nuqs** ist eine kleine Library mit Hooks wie `useState`, die auf der URL aufbauen. Zurück und Vorwärts aktualisieren sie automatisch.
+
+Wickle die App einmal in den Adapter für React ohne Framework:
 
 ```tsx
 import { NuqsAdapter } from "nuqs/adapters/react";
@@ -131,7 +135,7 @@ createRoot(document.getElementById("root")!).render(
 );
 ```
 
-Then describe each key once with a **parser**: its type and its default.
+Dann beschreibst du jeden Key einmal mit einem **Parser**: seinem Typ und seinem Default.
 
 ```tsx
 import { parseAsInteger, parseAsString, parseAsStringLiteral } from "nuqs";
@@ -146,7 +150,7 @@ export const listParsers = {
 };
 ```
 
-A control reads and writes through these parsers. `useQueryStates` handles several keys in one hook and one update; `useQueryState` handles a single key. Setting a key to `null` removes it from the URL. Here a category chip:
+Ein Control liest und schreibt über diese Parser. `useQueryStates` behandelt mehrere Keys in einem Hook und einem Update, `useQueryState` einen einzelnen Key. Setzt du einen Key auf `null`, verschwindet er aus der URL. Hier ein Kategorie-Chip:
 
 ```tsx
 const [{ category }, setParams] = useQueryStates(listParsers);
@@ -156,43 +160,43 @@ const selectCategory = (next: string) =>
   setParams({ category: next, page: null }, { history: "push" });
 ```
 
-What nuqs does for you:
+Das übernimmt nuqs für dich:
 
-- An invalid value returns the default: `?sort=<script>` reads as `"relevance"`.
-- Setting the default also removes the key, so the plain list keeps a short URL.
-- Writes use `replace` unless you ask for `push`.
+- Ein ungültiger Wert ergibt den Default: `?sort=<script>` wird als `"relevance"` gelesen.
+- Setzt du den Default, verschwindet der Key ebenfalls, so bleibt die URL der ungefilterten Liste kurz.
+- Schreibvorgänge verwenden `replace`, ausser du verlangst `push`.
 
-nuqs checks types, not ranges: `?page=-3` reads as `-3`. Clamp the page before you send it to the API.
+nuqs prüft Typen, keine Wertebereiche: `?page=-3` wird als `-3` gelesen. Begrenze die Seite, bevor du sie an die API schickst.
 
-Docs: [nuqs adapters](https://nuqs.dev/docs/adapters), [basic usage](https://nuqs.dev/docs/basic-usage), [parsers](https://nuqs.dev/docs/parsers/built-in), [options](https://nuqs.dev/docs/options)
+Doku: [nuqs adapters](https://nuqs.dev/docs/adapters), [basic usage](https://nuqs.dev/docs/basic-usage), [parsers](https://nuqs.dev/docs/parsers/built-in), [options](https://nuqs.dev/docs/options)
 
-## Keeping the old list visible while loading
+## Die alte Liste beim Laden sichtbar halten
 
-The user picks a category, and the list vanishes behind a spinner. On a slow connection the page jumps and the user loses their place. Keep the old list on screen, dimmed, until the new one is ready.
+Jemand wählt eine Kategorie, und die Liste verschwindet hinter einem Spinner. Bei langsamer Verbindung springt die Seite, und die Person verliert ihre Position. Lass die alte Liste abgedunkelt stehen, bis die neue bereit ist.
 
-React's `useDeferredValue` does this. It needs a list that **suspends**: the component is not ready yet because its data is still loading, so React waits for it. Data libraries such as TanStack Query (`useSuspenseQuery`) suspend for you.
+Das macht Reacts `useDeferredValue`. Es braucht eine Liste, die **suspendiert**: Die Komponente ist noch nicht bereit, weil ihre Daten noch laden, also wartet React auf sie. Data-Libraries wie TanStack Query (`useSuspenseQuery`) suspendieren für dich.
 
-The list page holds two values: `search`, what the URL says now, and `shownSearch`, the deferred copy the list renders. React renders the new value in the background and switches only once nothing suspends:
+Die Listenseite hält zwei Werte: `search`, was die URL jetzt sagt, und `shownSearch`, die verzögerte Kopie, die die Liste rendert. React rendert den neuen Wert im Hintergrund und wechselt erst, wenn nichts mehr suspendiert:
 
 ```mermaid
 sequenceDiagram
   participant U as User
   participant R as React
-  participant S as Screen
+  participant S as Bildschirm
   participant A as API
-  U->>R: picks "tools"
-  R->>S: search = "?category=tools", shownSearch = old value
-  Note over S: old list stays, dimmed
-  R->>R: background render with shownSearch = "?category=tools"
-  R->>A: the list suspends and loads tools
-  Note over R: this render is not shown, React waits
-  A-->>R: items arrive
-  R->>R: render again: nothing suspends
-  R->>S: switch: shownSearch = "?category=tools"
-  Note over S: new list, not dimmed
+  U->>R: wählt "tools"
+  R->>S: search = "?category=tools", shownSearch = alter Wert
+  Note over S: alte Liste bleibt, abgedunkelt
+  R->>R: Render im Hintergrund mit shownSearch = "?category=tools"
+  R->>A: die Liste suspendiert und lädt tools
+  Note over R: dieser Render wird nicht angezeigt, React wartet
+  A-->>R: Einträge kommen an
+  R->>R: erneuter Render: nichts suspendiert
+  R->>S: Wechsel: shownSearch = "?category=tools"
+  Note over S: neue Liste, nicht abgedunkelt
 ```
 
-Compare strings, not objects: React checks whether the value changed, and a new params object differs on every render, even when the URL did not. `createSerializer` from nuqs turns the parsed params into one query string. It starts from the parsed values, so `?page=banana` and no page at all give the same string.
+Vergleiche Strings, keine Objekte: React prüft, ob sich der Wert geändert hat, und ein neues Params-Objekt ist bei jedem Render ein anderes, auch wenn die URL gleich blieb. `createSerializer` von nuqs macht aus den geparsten Params einen einzigen Query-String. Es geht von den geparsten Werten aus, darum ergeben `?page=banana` und gar keine Seitenangabe denselben String.
 
 ```tsx
 const serialize = createSerializer(listParsers);
@@ -214,67 +218,67 @@ export function ItemsPage() {
 }
 ```
 
-The fallback appears only on the first load, when there is no old list to show.
+Der Fallback erscheint nur beim ersten Laden, wenn es noch keine alte Liste gibt.
 
-Docs: [useDeferredValue](https://react.dev/reference/react/useDeferredValue), [aria-busy on MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy)
+Doku: [useDeferredValue](https://react.dev/reference/react/useDeferredValue), [aria-busy auf MDN](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy)
 
-## Offset or cursor pagination
+## Offset- oder Cursor-Pagination
 
-**Offset pagination** says "skip 3, take 3" (`?page=2`, SQL `LIMIT 3 OFFSET 3`). Offsets count positions, not items. If a new item arrives at the top while the user reads page 1, everything moves down one place:
+**Offset-Pagination** sagt "überspringe 3, nimm 3" (`?page=2`, SQL `LIMIT 3 OFFSET 3`). Offsets zählen Positionen, nicht Einträge. Kommt oben ein neuer Eintrag dazu, während jemand Seite 1 liest, rutscht alles um eine Position nach unten:
 
 ```mermaid
 sequenceDiagram
   participant U as User
   participant S as Server
-  U->>S: page 1 (offset 0, limit 3)
+  U->>S: Seite 1 (offset 0, limit 3)
   S-->>U: A, B, C
-  Note over S: new item N is added at the top<br/>order is now N, A, B, C, D, E
-  U->>S: page 2 (offset 3, limit 3)
+  Note over S: neuer Eintrag N kommt oben dazu<br/>Reihenfolge jetzt N, A, B, C, D, E
+  U->>S: Seite 2 (offset 3, limit 3)
   S-->>U: C, D, E
-  Note over U: C appears twice
+  Note over U: C erscheint zweimal
 ```
 
-Deep offsets are also slow: `OFFSET 100000` still reads past 100,000 rows.
+Tiefe Offsets sind zudem langsam: `OFFSET 100000` liest trotzdem an 100'000 Zeilen vorbei.
 
-**Cursor pagination** says "take 3 after item C". A **cursor** is an opaque string from the server that marks an item's position. You send it back unchanged.
+**Cursor-Pagination** sagt "nimm 3 nach Eintrag C". Ein **Cursor** ist ein opaker String vom Server, der die Position eines Eintrags markiert. Du schickst ihn unverändert zurück.
 
 ```text
 page 1:  A B C              the server returns endCursor = C
 page 2:  after=C → D E F    a new item N at the top shifts nothing
 ```
 
-|                          | Offset (`?page=3`)            | Cursor (`after=...`)                          |
-| ------------------------ | ----------------------------- | --------------------------------------------- |
-| Jump to page 37          | yes                           | no, only next and previous                    |
-| Stable when data changes | no                            | yes                                           |
-| Cost of deep pages       | grows with the offset         | about constant, with an index on the sort key |
-| Good fit                 | small lists, admin tables     | large, live lists and feeds                   |
+|                                  | Offset (`?page=3`)            | Cursor (`after=...`)                                  |
+| -------------------------------- | ----------------------------- | ----------------------------------------------------- |
+| Zu Seite 37 springen             | ja                            | nein, nur nächste und vorherige                       |
+| Stabil, wenn sich Daten ändern   | nein                          | ja                                                    |
+| Kosten tiefer Seiten             | wachsen mit dem Offset        | etwa konstant, mit einem Index auf dem Sortier-Key    |
+| Passt zu                         | kleinen Listen, Admin-Tabellen | grossen, sich ändernden Listen und Feeds             |
 
-For Project 2, offset is fine. Switch to cursors when the list is large and changes while people read it.
+Für kleine Listen reicht Offset. Wechsle zu Cursors, wenn die Liste gross ist und sich ändert, während Leute sie lesen.
 
-## "Load more" that survives the back button
+## "Load more", das den Zurück-Button übersteht
 
-The user clicks "load more" three times, sees 96 items, opens item 63 and presses back. If the URL says only `/items`, the page now holds 24 items, and the scroll position no longer exists.
+Jemand klickt dreimal auf "Load more", sieht 96 Einträge, öffnet Eintrag 63 und drückt Zurück. Steht in der URL nur `/items`, enthält die Seite jetzt 24 Einträge, und die Scroll-Position existiert nicht mehr.
 
-Store how many items are shown: `?count=96`. On the way back, the page asks for the first 96 items in one request, so it needs no cursor.
+Speichere, wie viele Einträge angezeigt werden: `?count=96`. Beim Zurückkehren fragt die Seite die ersten 96 Einträge in einem Request an und braucht dafür keinen Cursor.
 
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant P as List page
+  participant P as Listenseite
   participant A as API
-  U->>P: clicks "load more" three times
-  P->>P: replaceState to ?count=96
-  U->>P: opens item 63, then presses back
-  P->>A: first 96 items
-  A-->>P: 96 items in one response
-  P-->>U: same list, same height
-  Note over U: the browser restores the scroll position
+  U->>P: klickt dreimal auf "Load more"
+  P->>P: replaceState zu ?count=96
+  U->>P: öffnet Eintrag 63, drückt dann Zurück
+  P->>A: erste 96 Einträge
+  A-->>P: 96 Einträge in einer Response
+  P-->>U: gleiche Liste, gleiche Höhe
+  Note over U: der Browser stellt die Scroll-Position wieder her
 ```
 
-The browser restores the scroll position on back by itself. That works only because the list is as long as before.
+Der Browser stellt die Scroll-Position bei Zurück selbst wieder her. Das klappt nur, weil die Liste so lang ist wie vorher.
 
-Here `useItems` stands for your data hook: it loads the first `first` items and tells you whether more exist.
+`useItems` steht hier für deinen Data-Hook: Er lädt die ersten `first` Einträge und sagt dir, ob es weitere gibt.
 
 ```tsx
 const PAGE_SIZE = 24;
@@ -297,43 +301,43 @@ export function ItemFeed() {
 }
 ```
 
-Each click refetches the whole visible list: 48 items, then 72. That is the price of one rule, "the URL says how many, the list shows that many", and the cap keeps it small.
+Jeder Klick lädt die ganze sichtbare Liste neu: 48 Einträge, dann 72. Das ist der Preis für eine einzige Regel, "die URL sagt, wie viele, die Liste zeigt so viele", und die Obergrenze hält ihn klein.
 
-Docs: [scrollRestoration on MDN](https://developer.mozilla.org/en-US/docs/Web/API/History/scrollRestoration)
+Doku: [scrollRestoration auf MDN](https://developer.mozilla.org/en-US/docs/Web/API/History/scrollRestoration)
 
 <details>
-<summary>Going further: numbered pages, "load more" or infinite scroll</summary>
+<summary>Weiterführend: nummerierte Seiten, "Load more" oder Infinite Scroll</summary>
 
-|                  | Numbered pages                | "Load more" button             | Infinite scroll                       |
-| ---------------- | ----------------------------- | ------------------------------ | ------------------------------------- |
-| User control     | high: jump and compare        | high: the user decides         | low: content keeps coming             |
-| Back button      | works: the page is in the URL | needs the count in the URL     | hard: needs count and scroll position |
-| Footer reachable | yes                           | yes                            | only when the list ends               |
-| Search engines   | good: each page has a URL     | good, if each chunk has a link | poor without a paginated fallback     |
+|                    | Nummerierte Seiten                 | "Load more"-Button                      | Infinite Scroll                               |
+| ------------------ | ---------------------------------- | --------------------------------------- | --------------------------------------------- |
+| Kontrolle für User | hoch: springen und vergleichen     | hoch: User entscheiden selbst            | tief: es kommt immer mehr Inhalt              |
+| Zurück-Button      | funktioniert: die Seite steht in der URL | braucht die Anzahl in der URL     | schwierig: braucht Anzahl und Scroll-Position |
+| Footer erreichbar  | ja                                 | ja                                      | erst, wenn die Liste endet                    |
+| Suchmaschinen      | gut: jede Seite hat eine URL       | gut, wenn jeder Abschnitt einen Link hat | schlecht ohne paginierten Fallback           |
 
-Crawlers do not click buttons or scroll; they follow `<a href>` links, so give every chunk its own URL, such as `?page=3`, and link to it.
+Crawler klicken keine Buttons und scrollen nicht; sie folgen `<a href>`-Links. Gib darum jedem Abschnitt eine eigene URL, etwa `?page=3`, und verlinke sie.
 
-Docs: [Google: pagination and incremental page loading](https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading)
+Doku: [Google: pagination and incremental page loading](https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading)
 
-If refetching the whole list on every click hurts, Relay's `usePaginationFragment` loads the first `count` once, then only the next 24 after the last cursor.
+Wenn das Neuladen der ganzen Liste bei jedem Klick stört: Relays `usePaginationFragment` lädt die ersten `count` einmal und danach nur die nächsten 24 nach dem letzten Cursor.
 
-Docs: [Relay pagination](https://relay.dev/docs/guided-tour/list-data/pagination/)
+Doku: [Relay pagination](https://relay.dev/docs/guided-tour/list-data/pagination/)
 
 </details>
 
-## Takeaways
+## Das Wichtigste
 
-- The URL is the single source of truth for a list. Everything that changes **what data** you show goes there, with a default for every key.
-- Data flows one way: controls write the URL, one place reads it and loads the data, the list renders the result.
-- Use `push` for choices the user may want to undo, `replace` for typing and "load more".
-- `useDeferredValue` with a suspending data source keeps the old list visible while the new one loads.
-- Use cursors for large, changing lists. For "load more", store the count in the URL so back restores the list.
+- Die URL ist die Single Source of Truth für eine Liste. Alles, was ändert, **welche Daten** du zeigst, gehört dorthin, mit einem Default für jeden Key.
+- Die Daten fliessen in eine Richtung: Controls schreiben die URL, eine Stelle liest sie und lädt die Daten, die Liste rendert das Ergebnis.
+- Nimm `push` für Entscheidungen, die man rückgängig machen will, `replace` für Tippen und "Load more".
+- `useDeferredValue` mit einer suspendierenden Datenquelle hält die alte Liste sichtbar, während die neue lädt.
+- Nimm Cursors für grosse, sich ändernde Listen. Speichere bei "Load more" die Anzahl in der URL, damit Zurück die Liste wiederherstellt.
 
-## Further reading
+## Weiterführende Links
 
-- [nuqs documentation](https://nuqs.dev/docs)
+- [nuqs-Dokumentation](https://nuqs.dev/docs)
 - [MDN: Working with the History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API/Working_with_the_History_API)
 - [React: useDeferredValue](https://react.dev/reference/react/useDeferredValue)
-- [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), the cursor format most GraphQL APIs follow: you send `first` and `after`, and get back `pageInfo.endCursor` and `hasNextPage`
+- [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), das Cursor-Format, dem die meisten GraphQL-APIs folgen: Du schickst `first` und `after` und bekommst `pageInfo.endCursor` und `hasNextPage` zurück
 - [TanStack Query: Infinite queries](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries)
-- [Markus Winand: We need tool support for keyset pagination](https://use-the-index-luke.com/no-offset), on why offsets get slow
+- [Markus Winand: We need tool support for keyset pagination](https://use-the-index-luke.com/no-offset), dazu, warum Offsets langsam werden

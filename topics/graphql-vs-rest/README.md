@@ -1,131 +1,241 @@
-# GraphQL vs REST, and why large sites use both
+# GraphQL vs. REST und warum grosse Websites beides nutzen
 
-> You built a REST API with Express, and for one team and one app it is the right tool. Now picture the Lending Desk item page pulling its data from six services, each run by a different team. GraphQL lets that page ask for exactly the data it needs in one request, and lets each component declare its own part. We look at what that solves, what it costs, and why large sites run both.
+> Öffne auf galaxus.ch eine Produkttyp-Seite. Die Navigation, die Produktliste und jede Produktkachel stammen von verschiedenen Teams und verschiedenen Services. Mit REST hangelt sich der Browser von einer API zur nächsten und bekommt gleichzeitig zu viele und zu wenige Daten. Mit GraphQL fragt die Seite in einem Request genau das an, was sie braucht, und jede Komponente deklariert ihren eigenen Teil. Wir schauen an, wie der Server eine solche Query beantwortet, was GraphQL kostet und warum grosse Websites beides betreiben.
 
-**Duration:** about 40 minutes
+**Dauer:** etwa 60 Minuten
 
-## Contents
+## Inhalt
 
-- [Where you are coming from](#where-you-are-coming-from)
-- [One page, six services](#one-page-six-services)
-- [GraphQL in five minutes](#graphql-in-five-minutes)
-- [Each component declares its own data](#each-component-declares-its-own-data)
-- [What GraphQL costs, and where REST still wins](#what-graphql-costs-and-where-rest-still-wins)
-- [When to use which](#when-to-use-which)
-- [Takeaways](#takeaways)
-- [Further reading](#further-reading)
+- [REST in Kürze](#rest-in-kürze)
+- [Das Beispiel: eine Seite, drei Teams](#das-beispiel-eine-seite-drei-teams)
+- [Die Seite mit REST laden](#die-seite-mit-rest-laden)
+- [GraphQL kennenlernen](#graphql-kennenlernen)
+- [Fragments: jede Komponente deklariert ihre Daten](#fragments-jede-komponente-deklariert-ihre-daten)
+- [GraphQL oder REST?](#graphql-oder-rest)
+- [Zusammenfassung](#zusammenfassung)
 
-## Where you are coming from
+## REST in Kürze
 
-In an earlier evening you built a REST API with Express: one route per resource, `GET /items/:id`, `POST /reservations`, JSON in and out. For Project 2 that fits. One team owns the API and the frontend, so when a page needs a new field, you add it to the route handler and deploy both.
+Jede **Ressource** hat eine URL, und HTTP-Methoden sagen, was mit ihr geschehen soll.
 
-Now let's grow the Lending Desk into a company-wide platform with millions of users. The item catalogue, users, availability, reservations, reviews and recommendations each belong to a different team and run as a separate service. The item page shows data from all six, and the frontend team owns none of them.
-
-**The core idea of this topic:** GraphQL lets the page fetch all of it in one request. Each component names the fields it needs. That costs things REST gives you for free, so large sites use both.
-
-## One page, six services
-
-Let's load the item page from the REST services. The owner card needs the owner's name, but the item only contains `ownerId`, so the browser has to wait for the item before it can ask for the owner.
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant C as Catalogue
-    participant U as Users
-    participant R as Reviews
-    B->>C: GET /items/42
-    C-->>B: item with ownerId 7
-    B->>U: GET /users/7
-    U-->>B: whole user (card needs 2 fields)
-    B->>R: GET /items/42/reviews
-    R-->>B: all 50 reviews (page shows 3)
+```http
+GET /api/products/5862971 HTTP/1.1
+Accept: application/json
 ```
 
-Three problems show up:
-
-- **Waterfall.** Each request waits for the one before. `Promise.all` helps only for independent calls: the owner still waits for the item.
-- **Over-fetching.** The whole user and all 50 reviews arrive, though the page shows two fields and three reviews.
-- **Under-fetching.** The item lacks the owner's name, so you need a second request.
-
-REST has answers: `?include=owner` embeds the owner, sparse fieldsets (`?fields[users]=name`) trim the fields, `?limit=3` caps the reviews. Or you build an endpoint for the page, or a **backend for frontend (BFF)**: a server for one frontend that combines the calls.
-
-For one team, these work well. Here, the frontend team owns none of the six services, so every new `include`, field or page endpoint waits in another team's backlog. And when five teams build one page, a page endpoint belongs to nobody, or to one team that becomes the bottleneck.
-
-GraphQL standardises that combining layer. The browser sends one request to one GraphQL server, which calls the services and returns only the fields asked for.
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant G as GraphQL server
-    participant C as Catalogue
-    participant U as Users
-    participant R as Reviews
-    B->>G: POST /graphql (one query)
-    G->>C: item 42
-    C-->>G: item with ownerId 7
-    par in parallel
-        G->>U: user 7
-        U-->>G: user
-    and
-        G->>R: 3 reviews of item 42
-        R-->>G: reviews
-    end
-    G-->>B: only the fields asked for
+```json
+{
+  "id": 5862971,
+  "name": "Banana plug SimpleLock",
+  "brand": { "id": 4401, "href": "/api/brands/4401" }
+}
 ```
 
-The waterfall has not disappeared. It moved into the data centre, where a round trip takes a few milliseconds. But the GraphQL server is one more service: a team has to build and run it.
+Die Response ist JSON mit einem Statuscode, hier `200`. Verwandte Ressourcen erscheinen oft als Links (`href`), denen ein Client mit dem nächsten Request folgen kann. `GET` liest, `POST` erstellt, `PUT` und `PATCH` ändern, `DELETE` löscht.
 
-Docs: [JSON:API: inclusion and sparse fieldsets](https://jsonapi.org/format/#fetching-includes), [Sam Newman: Backends for Frontends](https://samnewman.io/patterns/architectural/bff/)
+Gehören API und Frontend demselben Team, ist ein neues Feld auf einer Seite eine Änderung an einem Route Handler. **Das funktioniert nicht mehr, sobald die Seite Daten aus Services braucht, die anderen Teams gehören.**
 
-## GraphQL in five minutes
+## Das Beispiel: eine Seite, drei Teams
 
-If you know REST, you know most of the ideas already:
+Unser Beispiel ist eine echte Seite: [Audio-Steckverbinder auf galaxus.ch](https://www.galaxus.ch/en/s1/producttype/audio-connectors-3137?tagIds=591-1388). Die Seite ist echt. Die Teams, APIs und Responses auf dieser Seite sind **erfunden**, um das Muster zu zeigen. Sie beschreiben nicht, wie Galaxus gebaut ist.
 
-| REST | GraphQL | In plain words |
-| --- | --- | --- |
-| An OpenAPI document | The **schema** | Every type and field the API offers |
-| A DTO, the shape of a JSON body | A **type** | One named shape, such as `Item` |
-| An endpoint, `GET /items/:id` | A field on `Query`, `item(id: ...)` | An entry point for reading |
-| `GET` | A **query** | A read that lists the fields it wants |
-| `POST`, `PUT`, `DELETE` | A **mutation** | A write |
-| A route handler | A **resolver** | The server function behind one field |
-| The status code | The `errors` list | Errors travel in the response body |
+Stell dir vor, drei Teams teilen sich diese Seite:
 
-**The schema** is like a TypeScript interface for the whole API. `type Query` lists the entry points for reading, like your `GET` routes. `item(id: ID!)` takes an argument, `[Review!]` is a list of reviews, and `!` means "never null".
+- **Team A, Navigation**, gehört die Seite selbst und damit die Produkttypen: Titel, Breadcrumb und Sidebar.
+- **Team B, Produktlisten**, gehört die Liste in der Seite: welche Produkte zu den Filtern passen, wie viele es sind und in welcher Reihenfolge.
+- **Team C, Produkte**, gehören die Kacheln in der Liste: Name, Marke, Preis, Bilder und Bewertungen eines Produkts.
+
+![Die Produkttyp-Seite von Team A, darin die Liste von Team B und darin die Kacheln von Team C](./assets/page-teams.png)
+
+Jedes Team betreibt einen eigenen Service mit eigener REST API. **Die Verschachtelung ist auch die Ladereihenfolge:** Die Seite braucht die Produktliste von Team B, und die Liste braucht die Produkte von Team C.
+
+**Die Kernidee dieses Themas:** Mit GraphQL holt diese Seite alle ihre Daten in einem Request, mit genau den Feldern, die sie anzeigt, und jede Komponente deklariert ihren eigenen Teil. Das kostet Dinge, die REST gratis mitbringt, deshalb nutzen grosse Websites beides.
+
+## Die Seite mit REST laden
+
+Wir laden die Seite mit REST, einen Service nach dem anderen.
+
+### Runde 1: der Produkttyp von Team A
+
+Der Browser kennt die Produkttyp-ID `3137` aus der URL. Ein Request an Team A liefert Titel, Breadcrumb und Sidebar:
+
+```jsonc
+// GET /api/product-types/3137
+{
+  "id": 3137,
+  "name": "Audio connectors",
+  "breadcrumb": [
+    { "name": "IT + Multimedia", "href": "/api/categories/1" },
+    { "name": "Audio", "href": "/api/categories/22" },
+    { "name": "Audio Accessories + Spare Parts", "href": "/api/categories/316" }
+  ],
+  "navigation": [
+    { "name": "Audio connectors", "href": "/api/product-types/3137", "active": true },
+    { "name": "Audio player accessories", "href": "/api/product-types/2918" }
+    // ... 12 more
+  ],
+  // 👇 the page shows none of these
+  "seoText": "Explore our comprehensive selection of audio connectors ...",
+  "synonyms": ["audio plug", "jack plug"],
+  "createdAt": "2013-04-02T08:15:00Z",
+  "links": {
+    // 👇 where to get the products
+    "products": "/api/product-lists?productTypeId=3137"
+  }
+}
+```
+
+### Runde 2: die Produktliste von Team B
+
+Die Response des Produkttyps verlinkt auf die Produktliste. **Der Browser muss auf diese Response warten**, bevor er dem Link folgen kann. Er ergänzt den Filter aus der URL der Seite:
+
+```jsonc
+// GET /api/product-lists?productTypeId=3137&tagIds=591-1388&limit=48
+{
+  "totalCount": 1211,
+  "filters": [
+    { "id": "brand", "name": "Brand", "optionCount": 87 },
+    { "id": "price", "name": "Price", "min": 0.95, "max": 289 }
+    // ...
+  ],
+  "items": [
+    // 👇 only links: the tiles need another round trip
+    { "productId": 5862971, "href": "/api/products/5862971" },
+    { "productId": 3376520, "href": "/api/products/3376520" }
+    // ... 46 more
+  ],
+  "next": "/api/product-lists?productTypeId=3137&tagIds=591-1388&limit=48&offset=48"
+}
+```
+
+### Runde 3: die Produkte von Team C
+
+Jetzt weiss der Browser, welche 48 Produkte er zeigen soll, und fragt Team C **für jedes einzelne** an:
+
+```jsonc
+// GET /api/products/5862971
+{
+  "id": 5862971,
+  "name": "Banana plug SimpleLock",
+  "brand": { "id": 4401, "name": "clicktronic", "href": "/api/brands/4401" },
+  "price": { "amount": 15.9, "currency": "CHF" },
+  "images": ["/images/5862971-1.jpg", "/images/5862971-2.jpg" /* ... 10 more */],
+  "rating": { "average": 4.6, "count": 70 },
+  // 👇 the tile shows none of these
+  "description": "The SimpleLock banana plug fits cables up to 6 mm² ...",
+  "specifications": [{ "name": "Connector", "value": "4 mm banana" } /* ... 60 more */],
+  "warranty": "2 years",
+  "weightGrams": 12
+}
+```
+
+### Under-Fetching, Over-Fetching und ein Wasserfall
+
+Auf einer Zeitachse sieht man: **Die drei Runden warten aufeinander.**
+
+![Der REST-Wasserfall: drei Runden von Requests, jede wartet auf die vorherige](./assets/rest-waterfall.png)
+
+Drei Probleme zeigen sich, und die ersten beiden treten gleichzeitig auf:
+
+- **Under-Fetching.** Einer Response fehlen Daten, die die Seite braucht, also muss der Browser einen weiteren Request machen. Die Produktliste enthält nur Links, also braucht jede Kachel einen zusätzlichen Request.
+- **Over-Fetching.** Eine Response enthält Daten, die die Seite nicht braucht. Jedes Produkt kommt mit seiner Beschreibung und 60 Spezifikationen, obwohl die Kachel fünf Felder zeigt.
+- **Wasserfall.** Jede Runde wartet auf die vorherige. `Promise.all` hilft nur innerhalb einer Runde: Die Kacheln warten trotzdem auf die Liste, und die Liste wartet auf den Produkttyp.
+
+Auf einem Smartphone kann jeder Round Trip 150 ms oder mehr dauern, und 48 Produkte mit je 60 Spezifikationen sind viele Bytes für fünf Felder pro Kachel.
+
+## GraphQL kennenlernen
+
+### Schema, Query und Response
+
+graphql.org stellt GraphQL mit drei Snippets vor: einem Schema, einer Query und einer Response. Hier sind sie, leicht angepasst.
+
+**Das Schema** beschreibt jeden Typ und jedes Feld, das die API anbietet, wie ein TypeScript-Interface für die ganze API. `type Query` listet die Einstiegspunkte zum Lesen, wie deine `GET`-Routen.
 
 ```graphql
 type Query {
-  item(id: ID!): Item
+  project(name: String!): Project
 }
 
-type Item {
-  id: ID!
-  title: String!
-  owner: User!
-  # 👇 may be null, so a failing Reviews service does not break the item
-  reviews(first: Int!): [Review!]
+type Project {
+  name: String
+  tagline: String
+  contributors: [User]
+}
+```
+
+**Die Query** nennt die Felder, die der Client will. Diese hier fragt ein Feld eines Projekts an:
+
+```graphql
+{
+  project(name: "GraphQL") {
+    tagline
+  }
+}
+```
+
+**Die Response** hat dieselbe Form wie die Query, steckt in `data` und enthält nur die angefragten Felder:
+
+```json
+{
+  "data": {
+    "project": {
+      "tagline": "A query language for APIs"
+    }
+  }
+}
+```
+
+Das ist die ganze Idee: **Der Client bestimmt, welche Felder zurückkommen.** Ein paar weitere Begriffe, übersetzt in REST:
+
+| GraphQL | In REST hiesse das | Bedeutung |
+| --- | --- | --- |
+| **Schema** | Ein OpenAPI-Dokument | Jeder Typ und jedes Feld, das die API anbietet |
+| **Typ**, etwa `Project` | Die Form eines JSON-Bodys | Eine benannte Form |
+| **Feld auf `Query`** | Ein Endpoint, `GET /projects/:name` | Ein Einstiegspunkt zum Lesen |
+| **Query** | Ein `GET`-Request | Ein Lesezugriff, der die gewünschten Felder auflistet |
+| **Mutation** | `POST`, `PUT`, `DELETE` | Ein Schreibzugriff, der ebenfalls die angefragten Felder zurückgibt |
+| **Resolver** | Ein Route Handler | Die Serverfunktion hinter einem Feld |
+
+**Jede Query und jede Mutation geht an dieselbe URL**, meist als `POST /graphql` mit der Query und ihren Variablen im JSON-Body. `!` bedeutet im Schema "nie null", `[User]` ist eine Liste.
+
+Doku: [graphql.org](https://graphql.org/), [Queries](https://graphql.org/learn/queries/), [Schemas und Typen](https://graphql.org/learn/schema/), [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/)
+
+### Die Produkttyp-Seite als eine Query
+
+Jetzt zu unserer Seite. Der GraphQL-Server bietet dieses Schema an, vereinfacht:
+
+```graphql
+type Query {
+  productType(id: ID!): ProductType
 }
 
-type User {
+type ProductType {
   name: String!
-  avatarUrl: String
+  breadcrumb: [Category!]!
+  navigation: [NavigationEntry!]!
+  products(tagIds: [ID!], first: Int!): ProductList!
 }
 
-type Review {
-  rating: Int!
-  text: String!
+type ProductList {
+  totalCount: Int!
+  items: [Product!]!
 }
+
+type Product {
+  id: ID!
+  name: String!
+  brand: Brand!
+  price: Money!
+  imageUrl: String!
+  rating: Rating
+}
+
+# Category, NavigationEntry, Brand, Money and Rating are left out
 ```
 
-On the server, each field has a **resolver**. The one for `Item.owner` calls the Users service:
+**Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Service von Team B es beantwortet.
 
-```mermaid
-flowchart LR
-    Q["owner in the query"] --> R["resolver for Item.owner"]
-    R --> U["Users service<br/>GET /users/7"]
-```
-
-**A query** names the fields the client wants, and the response has the same shape. `$id` is a **variable** of type `ID!`: its value travels next to the query as JSON, like a route parameter.
+Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` und `$tagIds` sind **Variablen**: Ihre Werte reisen als JSON neben der Query mit, wie Routenparameter.
 
 <table>
 <tr><th>Query</th><th>Response</th></tr>
@@ -133,15 +243,20 @@ flowchart LR
 <td>
 
 ```graphql
-query ItemPage($id: ID!) {
-  item(id: $id) {
-    title
-    owner {
-      name
-    }
-    reviews(first: 2) {
-      rating
-      text
+query ProductTypePage($id: ID!, $tagIds: [ID!]) {
+  productType(id: $id) {
+    name
+    breadcrumb { name }
+    navigation { name url }
+    products(tagIds: $tagIds, first: 48) {
+      totalCount
+      items {
+        name
+        brand { name }
+        price { amount currency }
+        imageUrl
+        rating { average count }
+      }
     }
   }
 }
@@ -150,16 +265,26 @@ query ItemPage($id: ID!) {
 </td>
 <td>
 
-```json
+```jsonc
 {
   "data": {
-    "item": {
-      "title": "Cordless drill",
-      "owner": { "name": "Mira" },
-      "reviews": [
-        { "rating": 5, "text": "Strong battery" },
-        { "rating": 4, "text": "A bit heavy" }
-      ]
+    "productType": {
+      "name": "Audio connectors",
+      "breadcrumb": [{ "name": "IT + Multimedia" } /* ... */],
+      "navigation": [{ "name": "Audio player accessories", "url": "/en/s1/producttype/2918" } /* ... */],
+      "products": {
+        "totalCount": 1211,
+        "items": [
+          {
+            "name": "Banana plug SimpleLock",
+            "brand": { "name": "clicktronic" },
+            "price": { "amount": 15.9, "currency": "CHF" },
+            "imageUrl": "/images/5862971-1.jpg",
+            "rating": { "average": 4.6, "count": 70 }
+          }
+          // ... 47 more
+        ]
+      }
     }
   }
 }
@@ -169,219 +294,265 @@ query ItemPage($id: ID!) {
 </tr>
 </table>
 
-Every operation goes to the same URL, usually as a `POST` with the query and variables in the JSON body.
+Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **Für den Browser sind Over-Fetching und Under-Fetching weg.**
 
-If the Reviews service fails, the rest still arrives, with `reviews` set to `null` and an entry in `errors`:
+### Wenn ein Service ausfällt
+
+**Fällt ein Service aus, kommt der Rest trotzdem an.** Angenommen, Team C ist down: `items` ist `null`, und ein Eintrag in `errors` sagt, wo.
 
 ```json
 {
-  "data": { "item": { "title": "Cordless drill", "owner": { "name": "Mira" }, "reviews": null } },
-  "errors": [{ "message": "Reviews unavailable", "path": ["item", "reviews"] }]
+  "data": { "productType": { "name": "Audio connectors", "products": { "totalCount": 1211, "items": null } } },
+  "errors": [{ "message": "Products unavailable", "path": ["productType", "products", "items"] }]
 }
 ```
 
-The HTTP status is still a 2xx, usually `200`, so check `errors` yourself. Only a request the server cannot run at all, such as an invalid query, can get a 4xx.
+Der HTTP-Status ist trotzdem ein 2xx, meist `200`, also **prüf `errors` selbst**.
 
-Writes look the same, with the keyword `mutation` instead of `query`, and return the fields you ask for after the change.
+Doku: [Variablen](https://graphql.org/learn/queries/#variables), [Response](https://graphql.org/learn/response/)
 
-Docs: [Queries](https://graphql.org/learn/queries/), [Schemas and types](https://graphql.org/learn/schema/), [Mutations](https://graphql.org/learn/mutations/), [Response](https://graphql.org/learn/response/), [Serving over HTTP](https://graphql.org/learn/serving-over-http/)
+### Resolver: wie der Server die Daten sammelt
+
+Der Browser hat einen Request geschickt. Der GraphQL-Server muss die Daten trotzdem aus drei Services zusammentragen. Das macht er mit **Resolvern**: Funktionen, die wissen, wie sie den Wert eines Felds bekommen.
+
+**Nicht jedes Feld braucht einen.** Gibt ein Resolver ein Objekt zurück, werden die Felder dieses Objekts direkt daraus gelesen. Ein eigener Resolver ist nur nötig, wenn die Daten eines Felds von woanders kommen oder Arbeit brauchen:
+
+![Die Query der Seite: Vier Felder haben einen eigenen Resolver, der Rest kommt mit dem Elternobjekt](./assets/resolvers.png)
+
+Im Code sehen die Resolver für unsere Seite so aus. Jeder Resolver bekommt das Objekt, das sein Eltern-Resolver zurückgegeben hat (`parent`), die Argumente des Felds (`args`) und einen `context` mit den API-Clients für diesen Request:
+
+```ts
+const resolvers = {
+  Query: {
+    // 👇 Team A: one call returns name, breadcrumb and navigation as well
+    productType: (_parent, args, context) => context.teamA.getProductType(args.id),
+  },
+  ProductType: {
+    products: (productType, args, context) =>
+      context.teamB.getProductList({ productTypeId: productType.id, tagIds: args.tagIds, limit: args.first }),
+  },
+  ProductList: {
+    // 👇 Team B returns ids only, so fetch all 48 products from Team C in one call
+    items: (list, _args, context) => context.teamC.getProducts(list.productIds),
+  },
+  Product: {
+    // a resolver that calls nothing: the schema offers one image, the service returns a list
+    imageUrl: (product) => product.images[0],
+  },
+};
+```
+
+`name`, `breadcrumb`, `navigation`, `totalCount`, `price`, `brand` und `rating` haben keinen Resolver. GraphQL liest `productType.name` oder `product.price` aus dem Objekt, das der Eltern-Resolver zurückgegeben hat. Deshalb ist `getProductType` **ein Aufruf, nicht ein Aufruf pro Feld**.
+
+Der Server führt die Resolver Ebene für Ebene aus: `products` wartet auf `productType`, und `items` wartet auf `products`. **Der Wasserfall ist noch da, aber er läuft direkt neben den Services:**
+
+![GraphQL: ein Round Trip für den Browser, drei kurze Runden auf dem Server](./assets/graphql-waterfall.png)
+
+Auch das Over-Fetching ist umgezogen: Der Service von Team C liefert weiterhin das ganze Produkt mit 60 Spezifikationen, aber an den GraphQL-Server im selben Rechenzentrum. **Nur die fünf Felder, die die Seite angefragt hat, reisen zum Smartphone.**
+
+Doku: [graphql.org: Execution](https://graphql.org/learn/execution/), [Apollo Server: Resolver](https://www.apollographql.com/docs/apollo-server/data/resolvers)
 
 <details>
-<summary>Going further: one graph, many teams (federation)</summary>
+<summary>Weiterführend: das N+1-Problem und DataLoader</summary>
 
-A single GraphQL server that calls every REST service helps, but every new field needs the team that runs it, so it becomes a bottleneck. Large sites therefore often move to a **federated graph**. Each team runs a **subgraph**: a GraphQL service with its own part of the schema. A **gateway** (also called router) composes all subgraphs into one schema and splits each query among them.
+Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze Liste der IDs auf einmal bekommt. Oft sieht es anders aus: Ein `Product.brand`-Resolver läuft einmal pro Produkt, also verursachen 48 Produkte einen Request für die Liste plus 48 für die Marken. Das ist das **N+1-Problem**.
 
-Several subgraphs contribute fields to the same type. `@key` says how to identify an item, so the gateway can take the `id` from the Catalogue subgraph and ask the Reviews subgraph for the reviews of that item.
+**DataLoader** sammelt die Keys, nach denen Resolver während der Ausführung der Query fragen, und ruft eine Batch-Funktion einmal auf:
 
-```graphql
-# Catalogue subgraph
-type Item @key(fields: "id") {
-  id: ID!
-  title: String!
+```ts
+// one loader per request, so cached brands never leak between requests
+export function createBrandLoader(teamC: TeamCApi) {
+  return new DataLoader<number, Brand>(async (ids) => {
+    // 👇 one call for all ids
+    const brands = await teamC.getBrands(ids);
+    return ids.map((id) => brands.find((brand) => brand.id === id) ?? new Error(`No brand ${id}`));
+  });
 }
 
-# Reviews subgraph
-type Item @key(fields: "id") {
-  id: ID!
-  reviews(first: Int!): [Review!]
-}
+// resolver for Product.brand, with the loader in the context
+const brand = (product: Product, _args: unknown, context: Context) => context.brandLoader.load(product.brandId);
 ```
 
-This is Apollo Federation syntax, with the `@link` header that imports `@key` left out.
+Die Batch-Funktion muss pro Key ein Resultat zurückgeben, in derselben Reihenfolge wie die Keys.
 
-Docs: [graphql.org: Federation](https://graphql.org/learn/federation/), [Apollo Federation: entities](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/entities/intro)
+Doku: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataLoader](https://github.com/graphql/dataloader)
 
 </details>
 
-## Each component declares its own data
+## Fragments: jede Komponente deklariert ihre Daten
 
-One query per page solves the waterfall. But who writes it?
+Eine Query pro Seite löst den Wasserfall für den Browser. **Aber wer schreibt sie?** Die Seite besteht aus Komponenten, und die Komponenten gehören den drei Teams:
 
-- If **the page** writes it, it lists every field of every team. Each new field means editing the page team's file, and nobody dares remove a field, so the query only grows.
-- If **every component** fetches its own data, the teams are independent again, but we are back to many requests and waterfalls.
+![Die Seite aufgeteilt in Komponenten: ProductTypePage umschliesst CategoryNavigation, ProductTypeHeader und ProductList, und ProductList rendert ProductTile](./assets/page-components.png)
 
-The answer is **colocation**: each component declares its fields next to its code, as a **fragment**. A fragment is a named list of fields on one type, and `...Name` inserts it into a query. The page composes the fragments into one query. A name like `OwnerCard_item` means: what `OwnerCard` needs from `item`.
+- Schreibt **die Seite** die Query, listet sie jedes Feld jedes Teams auf. Jedes neue Feld auf einer Kachel heisst, die Query der Seite anzupassen, und niemand wagt es, ein Feld zu entfernen, also wächst die Query nur.
+- Holt **jede Komponente** ihre eigenen Daten, sind die Teams wieder unabhängig, aber wir sind zurück bei vielen Requests und Wasserfällen.
 
-```mermaid
-flowchart TD
-    Q["ItemPage query<br/>page team"]
-    Q --> H["ItemHeader_item<br/>title, photos<br/>Catalogue team"]
-    Q --> O["OwnerCard_item<br/>owner name, avatar<br/>Users team"]
-    Q --> A["ReserveBox_item<br/>availability<br/>Reservations team"]
-    Q --> R["Reviews_item<br/>3 reviews<br/>Reviews team"]
-```
+Die Lösung ist **Colocation**: Jede Komponente deklariert ihre Felder direkt neben ihrem Code, als **Fragment**. Ein Fragment ist eine benannte Liste von Feldern auf einem Typ, und `...Name` fügt es in eine Query ein. Ein Name wie `ProductTile_product` bedeutet: was `ProductTile` von einem `product` braucht.
 
-Queries and fragments are plain strings, so TypeScript cannot check them. A code generator such as GraphQL Codegen reads them with the schema and writes a type for each, like OpenAPI codegen does for REST. You wrap each string in its generated `graphql(...)` function to get that type.
+### Die Produktkachel und ihr Fragment
+
+Die Kachel zeigt fünf Dinge, also listet ihr Fragment fünf Felder:
+
+![Die Produktkachel und die Felder ihres Fragments](./assets/product-tile-fragment.png)
+
+Queries und Fragments sind gewöhnliche Strings, deshalb **kann TypeScript sie nicht prüfen**. Ein Codegenerator wie GraphQL Codegen liest sie zusammen mit dem Schema und schreibt für jede einen Typ, so wie OpenAPI-Codegen das für REST tut. Du packst jeden String in die generierte Funktion `graphql(...)`, um diesen Typ zu bekommen.
 
 ```tsx
 import { graphql, type FragmentType, getFragmentData } from "./gql";
 
-export const OwnerCardFragment = graphql(`
-  fragment OwnerCard_item on Item {
-    owner { name avatarUrl }
+export const ProductTileFragment = graphql(`
+  fragment ProductTile_product on Product {
+    name
+    brand { name }
+    price { amount currency }
+    imageUrl
+    rating { average count }
   }
 `);
 
-type OwnerCardProps = { item: FragmentType<typeof OwnerCardFragment> };
+type ProductTileProps = { product: FragmentType<typeof ProductTileFragment> };
 
-export function OwnerCard(props: OwnerCardProps) {
-  // 👇 unmask: only the fields of OwnerCard_item
-  const item = getFragmentData(OwnerCardFragment, props.item);
-  return <p>Lent by {item.owner.name}</p>;
+export function ProductTile(props: ProductTileProps) {
+  // 👇 unmask: only the fields of ProductTile_product
+  const product = getFragmentData(ProductTileFragment, props.product);
+  return (
+    <article>
+      <img src={product.imageUrl} alt="" />
+      <p>{product.price.amount.toFixed(2)}</p>
+      <h3><strong>{product.brand.name}</strong> {product.name}</h3>
+      <Rating average={product.rating?.average} count={product.rating?.count} />
+    </article>
+  );
 }
 ```
 
-`props.item` arrives **masked**: its type hides every field. `getFragmentData` unmasks it with the component's own fragment.
+### Die Query der Seite zusammensetzen
 
-The page spreads the fragments into its query and hands each component the item:
+`ProductList` gehört die Liste, also fragt ihr Fragment die Anzahl an und setzt das Fragment der Kachel in jedes Item ein:
 
 ```tsx
-export const itemPageQuery = graphql(`
-  query ItemPage($id: ID!) {
-    item(id: $id) {
-      title
-      ...OwnerCard_item
-      ...Reviews_item
+export const ProductListFragment = graphql(`
+  fragment ProductList_productType on ProductType {
+    products(tagIds: $tagIds, first: 48) {
+      totalCount
+      items {
+        id
+        ...ProductTile_product
+      }
     }
   }
 `);
 
-// ... run the query with your GraphQL client
-return (
-  <>
-    <h1>{item.title}</h1>
-    <OwnerCard item={item} />
-    <Reviews item={item} />
-  </>
-);
+// in ProductList, after unmasking its own fragment
+<h2>{productType.products.totalCount} products</h2>
+{productType.products.items.map((item) => <ProductTile key={item.id} product={item} />)}
 ```
 
-The fragments become part of the query, so the page still sends one request.
+`ProductTypePage`, die Seitenkomponente von Team A, setzt nur die Fragments ihrer direkten Kinder zusammen:
 
-This is **data masking**: a component sees only the fields its own fragment lists. In `ItemPage`:
+```graphql
+query ProductTypePage($id: ID!, $tagIds: [ID!]) {
+  productType(id: $id) {
+    ...ProductTypeHeader_productType
+    ...CategoryNavigation_productType
+    ...ProductList_productType
+  }
+}
+```
+
+Die Fragments werden Teil der Query, also **schickt die Seite weiterhin einen Request**. Fügt Team C der Kachel ein Feld hinzu, ändert es `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
+
+### Data Masking
+
+**Data Masking** hält die Teams auseinander. `props.product` kommt **maskiert** an: Sein Typ versteckt jedes Feld, bis die Komponente es mit ihrem eigenen Fragment demaskiert. In `ProductList` heisst das:
 
 ```tsx
-item.title; // fine: the page asked for it
-item.owner.name; // TypeScript error: only OwnerCard asked for it
+item.id; // fine: ProductList asked for it
+item.price; // TypeScript error: only ProductTile asked for it
 ```
 
-So no team depends on another team's fields by accident, and removing a field from your fragment breaks only your own component.
+Kein Team hängt aus Versehen von den Feldern eines anderen Teams ab, und **wenn du ein Feld aus deinem Fragment entfernst, kann das nur deine eigene Komponente kaputt machen**.
 
-Docs: [The Guild: fragments with GraphQL Codegen](https://the-guild.dev/blog/unleash-the-power-of-fragments-with-graphql-codegen)
+Doku: [graphql.org: Fragments](https://graphql.org/learn/queries/#fragments), [The Guild: Fragments mit GraphQL Codegen](https://the-guild.dev/blog/unleash-the-power-of-fragments-with-graphql-codegen), [Codegen Client Preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
 
 <details>
-<summary>Going further: Relay and the Codegen setup</summary>
+<summary>Weiterführend: Relay</summary>
 
-**Relay**, Meta's GraphQL client for React, introduced this model. Its compiler expects fragment names that start with the module name, generates the types, and masks the data at runtime too, not only in TypeScript. A component reads its fragment with the `useFragment` hook. Relay's ESLint rule `relay/unused-fields` reports fields a module requests but never reads.
+**Relay**, der GraphQL-Client von Meta für React, hat dieses Modell eingeführt. Sein Compiler generiert die Typen und maskiert die Daten auch zur Laufzeit, nicht nur in TypeScript. Eine Komponente liest ihr Fragment mit dem Hook `useFragment`. Die ESLint-Regel `relay/unused-fields` von Relay meldet Felder, die eine Komponente anfragt, aber nie liest.
 
-In GraphQL Codegen's client preset, `getFragmentData` is called `useFragment` by default, though it is not a hook. The `unmaskFunctionName` option renames it.
-
-Docs: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), [Relay: fragments](https://relay.dev/docs/guided-tour/rendering/fragments/), [eslint-plugin-relay](https://github.com/relayjs/eslint-plugin-relay), [Codegen client preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
+Doku: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), [Relay: Fragments](https://relay.dev/docs/guided-tour/rendering/fragments/), [eslint-plugin-relay](https://github.com/relayjs/eslint-plugin-relay)
 
 </details>
 
-## What GraphQL costs, and where REST still wins
+## GraphQL oder REST?
 
-GraphQL moves work from the client to the server and to tooling. Here is where it lands.
+### Die Antwort von REST auf Under-Fetching: `?include=`
 
-| Concern | REST | GraphQL |
+REST kennt ein Muster gegen Under-Fetching: Der Client verlangt, dass eine Response verwandte Ressourcen einbettet.
+
+```http
+GET /api/product-lists?productTypeId=3137&include=products
+```
+
+JSON:API nennt das **Inclusion of Related Resources**, Stripe nennt es **Expanding** einer Response (`expand[]=...`). Das löst das Problem nur teilweise:
+
+- **Over-Fetching bleibt.** Jedes eingebettete Produkt kommt weiterhin mit seiner Beschreibung und 60 Spezifikationen.
+- **Die Daten müssen dort verknüpfbar sein.** Der Service von Team B kann Produkte nur einbetten, wenn er an die Daten von Team C herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
+- **Jeder Endpoint implementiert es neu.** Jede Response, die Produkte einbettet, und tiefere Daten wie `include=products.brand`, muss die Verknüpfung selbst machen.
+
+**GraphQL macht das einmal, in den Resolvern, und jede Query kann es nutzen.**
+
+Doku: [JSON:API: Inclusion of Related Resources](https://jsonapi.org/format/#fetching-includes), [Stripe: Expanding Responses](https://docs.stripe.com/expand)
+
+### Was GraphQL kostet und wo REST weiterhin gewinnt
+
+GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
+
+| Thema | REST | GraphQL |
 | --- | --- | --- |
-| **Caching** | The URL is the cache key. Browsers and CDNs (shared caches near the user) store a `GET` with `Cache-Control`. | Usually a `POST` to one URL, which caches skip. A **persisted query** helps: a `GET` with a short ID for a query the server already knows. |
-| **HTTP features** | Redirects and file uploads are plain HTTP. | Not part of GraphQL. Files usually go over plain HTTP. |
-| **Errors** | One status code per request. | A failed field still returns a 2xx, usually `200`. Monitoring that counts status codes misses it. |
-| **Authorization** | Checked in each route handler. | Many queries reach the same field, so check permissions once, in the code the resolvers call. |
-| **Expensive queries** | You know every request in advance. | Clients write their own: 100 items with 100 reviews each is 10,000 reviews. Servers limit depth and cost. |
-| **Running it** | `fetch` and Express. | A schema, a server a team runs, codegen, schema checks in CI. |
+| **Caching** | Die URL ist der Cache-Key. Browser und CDNs (geteilte Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Eine **Persisted Query** hilft: ein `GET` mit einer kurzen ID für eine Query, die der Server schon kennt. |
+| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP. | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP. |
+| **Fehler** | Ein Statuscode pro Request. | Ein fehlgeschlagenes Feld liefert trotzdem ein 2xx, meist `200`. Monitoring, das Statuscodes zählt, verpasst es. |
+| **Autorisierung** | Wird in jedem Route Handler geprüft. | Viele Queries erreichen dasselbe Feld, also prüfst du Berechtigungen einmal, im Code, den die Resolver aufrufen. |
+| **Teure Queries** | Jeder Request ist im Voraus bekannt. | Clients schreiben ihre eigenen: 48 Produkte mit je 60 Spezifikationen und 50 Reviews. Server begrenzen Tiefe und Kosten. |
+| **Betrieb** | `fetch` und Express. | Ein Schema, ein Server, den ein Team betreibt, Codegen, Schema-Checks im CI. |
 
-Docs: [Best practices](https://graphql.org/learn/best-practices/), [Authorization](https://graphql.org/learn/authorization/), [Security](https://graphql.org/learn/security/), [Apollo: file upload best practices](https://www.apollographql.com/blog/file-upload-best-practices)
+Doku: [Best Practices](https://graphql.org/learn/best-practices/), [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
 
 <details>
-<summary>Going further: caching with persisted queries</summary>
+<summary>Weiterführend: Caching mit Persisted Queries</summary>
 
-Queries may be sent with `GET`, which caches can store. Long queries do not fit into URL length limits, so the client sends a short identifier instead of the query text, a **persisted query**: `GET /graphql?documentId=<hash>&variables=...` (parameter names differ between tools). The server still has to send `Cache-Control`, and a response that mixes public item data with the logged-in user's data cannot be cached publicly.
+Queries dürfen mit `GET` geschickt werden, und das können Caches speichern. Lange Queries passen nicht in die Längenlimits von URLs, deshalb schickt der Client statt des Query-Texts eine kurze Kennung, eine **Persisted Query**: `GET /graphql?documentId=<hash>&variables=...` (die Parameternamen unterscheiden sich je nach Tool). Der Server muss trotzdem `Cache-Control` senden, und eine Response, die öffentliche Produktdaten mit Daten der eingeloggten Person mischt, darf nicht öffentlich gecacht werden.
 
-Docs: [Serving over HTTP](https://graphql.org/learn/serving-over-http/), [Relay: persisted queries](https://relay.dev/docs/guides/persisted-queries/)
+Doku: [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/), [Relay: Persisted Queries](https://relay.dev/docs/guides/persisted-queries/)
 
 </details>
 
-<details>
-<summary>Going further: the N+1 problem and DataLoader</summary>
+### Beides in einer grossen Firma
 
-A list of 20 reviews, each with an `author` field, runs the `author` resolver 20 times: one request for the list plus 20 for the authors. **DataLoader** collects the keys requested while the query runs and calls your batch function once.
+Was nutzt also ein grosser Shop? **Beides, jeweils dort, wo es passt.** Im Hintergrund betreibt jedes Team eigene Services mit eigener Datenbank, untereinander meist mit REST APIs verbunden. Davor sitzen zwei Arten von Einstiegspunkten:
 
-```ts
-// one loader per request, so cached users never leak between requests
-export function createUserLoader(usersApi: UsersApi) {
-  return new DataLoader<string, User>(async (ids) => {
-    // 👇 one call for all ids
-    const users = await usersApi.getMany(ids);
-    return ids.map((id) => users.find((user) => user.id === id) ?? new Error(`No user ${id}`));
-  });
-}
+![Ein GraphQL-Layer für die Daten der Seiten, REST-Endpoints für alles andere, dahinter die Services der Teams](./assets/large-company.png)
 
-// resolver for Review.author, with the loader in the request context
-const author = (review: Review, _args: unknown, context: Context) =>
-  context.userLoader.load(review.authorId);
-```
+- **Ein GraphQL-Layer** für die Seiten des Webshops und der Mobile App. Beide Clients fragen dasselbe Schema nach genau dem, was jeder Screen braucht.
+- **REST-Endpoints** für alles, was gewöhnliches HTTP ist oder mit der Aussenwelt spricht: Login mit seinen Redirects, Datei-Uploads, Webhooks eines Payment-Providers und eine öffentliche API für Partnershops, die stabile URLs und eine Dokumentation in OpenAPI erwarten.
 
-The batch function must return one result per key, in the same order as the keys.
+Ein einzelner GraphQL-Server, der 30 Services aufruft, **wird selbst zum Flaschenhals**: Jedes neue Feld braucht das Team, das ihn betreibt. Grosse Firmen teilen den Graphen deshalb oft auf, sodass jedes Team seinen Teil des Schemas betreibt und ein Gateway die Teile zu einem zusammenfügt. Das nennt sich **Federation**.
 
-Docs: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataLoader](https://github.com/graphql/dataloader)
-
-</details>
-
-## When to use which
-
-| Situation | Use |
+| Situation | Einsatz |
 | --- | --- |
-| One team, one app, a handful of resources (Project 2) | REST |
-| Public data a CDN should cache, file uploads, login redirects, webhooks | REST |
-| A page or several clients combining data from many services | GraphQL |
-| Many teams building parts of the same page | GraphQL with fragments |
+| Ein Team, eine App, eine Handvoll Ressourcen | REST |
+| Öffentliche Daten, die ein CDN cachen soll, Datei-Uploads, Login-Redirects, Webhooks, Partner-APIs | REST |
+| Eine Seite oder mehrere Clients, die Daten aus vielen Services kombinieren | GraphQL |
+| Viele Teams, die Teile derselben Seite bauen | GraphQL mit Fragments |
 
-A large Lending Desk ends up with both:
+Doku: [graphql.org: Federation](https://graphql.org/learn/federation/)
 
-```mermaid
-flowchart LR
-    B["Browser"] -->|"page data"| G["GraphQL server"]
-    G --> S["Catalogue, Users, Reviews, ..."]
-    B -->|"login, uploads, events"| R["REST routes"]
-    P["Payment provider"] -->|"webhook"| R
-```
+## Zusammenfassung
 
-## Takeaways
+Eine Seite in einer grossen Applikation bezieht ihre Daten aus vielen Services, die verschiedenen Teams gehören. Mit REST **lädt der Browser sie in einem Wasserfall**: Er folgt Links von einer API zur nächsten, bekommt Felder, die er nie anzeigt, und braucht trotzdem weitere Requests für die Felder, die er anzeigt. `?include=` bettet verwandte Daten ein, aber nur, wo der Service sie verknüpfen kann, ohne das Over-Fetching zu beheben, und in jedem Endpoint von Neuem.
 
-- GraphQL fetches exactly the fields a page needs from many services in one request. The waterfall moves to the server, close to the data.
-- REST can do much of this with `?include=`, sparse fieldsets or a BFF. GraphQL pays off when many teams share a page and the frontend team owns none of the services.
-- Fragments let each component declare its own fields, and data masking keeps the teams independent.
-- GraphQL costs what REST gives you for free: URL caching, plain HTTP features and status codes. And a team has to run the server.
-- Decide per use case, not per company. Most large sites run both.
+**GraphQL verknüpft die Daten an einem Ort, auf dem Server.** Das Schema beschreibt alle Daten als einen Graphen, die Seite fragt in einem Request genau ihre Felder an, und Resolver auf dem Server holen jedes Stück beim Service, dem es gehört. Den Wasserfall gibt es weiterhin, aber er läuft im Rechenzentrum, wo ein Aufruf Millisekunden dauert. Mit Fragments deklariert jede Komponente ihre eigenen Felder, und Data Masking verhindert, dass Teams von den Feldern anderer Teams abhängen.
 
-## Further reading
-
-- [graphql.org: Learn](https://graphql.org/learn/), the official introduction, including performance, security and federation
-- [GraphQL over HTTP specification](https://http-spec.graphql.org/draft/), how requests and status codes work
-- [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), the reasoning behind colocation and data masking
-- [GraphQL Codegen: client preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
-- [graphql.org: Governance and versioning](https://graphql.org/learn/governance-versioning/), how to change a schema without `/v2`
-- [Apollo Federation documentation](https://www.apollographql.com/docs/graphos/schema-design/federated-schemas/federation)
+GraphQL kostet, was REST gratis mitbringt: Caching über die URL, gewöhnliche HTTP-Features, ehrliche Statuscodes und einen Server, den jemand betreiben muss. **Deshalb nutzen grosse Websites beides:** GraphQL für die Daten hinter ihren Seiten, REST an den Rändern.

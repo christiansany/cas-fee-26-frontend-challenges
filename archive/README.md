@@ -1,6 +1,15 @@
-# Archive
+# Archiv
 
-Chapters that are not on the current menu. They were last taught in 2024 and are kept here unchanged, in German, so they can come back.
+Kapitel, die gerade nicht auf dem Menü stehen. Sie bleiben hier, damit sie zurückkommen können.
 
-- [Minieinführung in Vue.js](./vuejs-mini-intro/README.md), about 90 minutes
-- [Compound Components mit Vue.js](./vue-compound-components/README.md), about 45 minutes. Code: [christiansany/vue-compound-components](https://github.com/christiansany/vue-compound-components)
+## Geschrieben 2026, auf Englisch
+
+- [When parts of the page fail](./partial-failures/README.md), etwa 40 Minuten
+- [Logging and debugging in production](./logging/README.md), etwa 40 Minuten
+
+## Aus 2024
+
+Zuletzt 2024 unterrichtet und unverändert.
+
+- [Minieinführung in Vue.js](./vuejs-mini-intro/README.md), etwa 90 Minuten
+- [Compound Components mit Vue.js](./vue-compound-components/README.md), etwa 45 Minuten. Code: [christiansany/vue-compound-components](https://github.com/christiansany/vue-compound-components)

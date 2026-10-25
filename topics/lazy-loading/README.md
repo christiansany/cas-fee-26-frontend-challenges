@@ -1,52 +1,52 @@
-# Loading behaviour: lazy loading with React
+# Ladeverhalten: Lazy Loading mit React
 
-> Your page sends every component, image and data request at once, even the parts nobody scrolls to. Let's load those parts only when the user is about to see them, with the `IntersectionObserver`, the native `loading="lazy"` attribute and React's `lazy`. We fix the layout shifts this causes with skeletons. Then we turn it around and load the next page before the user clicks.
+> Deine Seite schickt alle Komponenten, Bilder und Daten-Requests auf einmal los, auch für die Teile, zu denen niemand scrollt. Wir laden diese Teile erst, wenn der Benutzer sie gleich sieht: mit dem `IntersectionObserver`, dem nativen Attribut `loading="lazy"` und Reacts `lazy`. Die Layout Shifts, die dabei entstehen, beheben wir mit Skeletons. Danach drehen wir es um und laden die nächste Seite, bevor der Benutzer klickt.
 
-**Duration:** about 45 minutes
+**Dauer:** etwa 45 Minuten
 
-## Contents
+## Inhalt
 
-* [The problem](#the-problem)
-* [Lazy loading](#lazy-loading)
-* [Lazy loading in React](#lazy-loading-in-react)
-* [Putting it all together](#putting-it-all-together)
-* [Load before the click: prefetching](#load-before-the-click-prefetching)
-* [Summary](#summary)
+* [Das Problem](#das-problem)
+* [Lazy Loading](#lazy-loading)
+* [Lazy Loading in React](#lazy-loading-in-react)
+* [Alles kombinieren](#alles-kombinieren)
+* [Vor dem Klick laden: Prefetching](#vor-dem-klick-laden-prefetching)
+* [Zusammenfassung](#zusammenfassung)
 
-## The problem
+## Das Problem
 
-Our websites and apps contain many components. When a user visits our site, they wait until everything is loaded, parsed and executed. On slow connections and older devices this can take a long time. That hurts the user experience. The longer the page takes to load, the higher the bounce rate. This lowers the conversion rate and also hurts SEO, because search ranking takes the [Core Web Vitals](https://web.dev/explore/learn-core-web-vitals) into account.
+Unsere Webseiten und Apps enthalten viele Komponenten. Wenn ein Benutzer unsere Seite besucht, wartet er, bis alles geladen, geparst und ausgeführt ist. Bei langsamen Verbindungen und älteren Geräten kann das lange dauern. Das schadet der Benutzererfahrung. Je länger die Ladezeit, desto höher die Absprungrate. Das senkt die Conversion-Rate und schadet auch dem SEO, weil das Suchranking die [Core Web Vitals](https://web.dev/explore/learn-core-web-vitals) berücksichtigt.
 
-Websites and apps also depend on internal communication between services, especially during server-side rendering (SSR). If one service is slow, it can slow down the whole app. This happens, for example, when a service runs a slow database query. The app has to wait until the query finishes before it can continue. The result is a long loading time.
+Webseiten und Apps hängen zudem von interner Kommunikation zwischen Services ab, besonders beim Server-Side Rendering (SSR). Ist ein Service langsam, kann er die ganze App ausbremsen. Das passiert zum Beispiel, wenn ein Service eine langsame Datenbankabfrage macht. Die App muss warten, bis die Abfrage fertig ist, bevor sie weitermachen kann. Die Folge ist eine lange Ladezeit.
 
-![Loading Problem](./assets/loading-problem.png)
+![Ladeproblem](./assets/loading-problem.png)
 
-## Lazy loading
+## Lazy Loading
 
-### What is lazy loading?
+### Was ist Lazy Loading?
 
-Lazy loading is a technique that loads resources such as images or JavaScript only when they are needed, for example when they appear in the visible area of the page (the viewport). This shortens the initial loading time and improves the user experience, because the browser does not load large files up front.
+Lazy Loading ist eine Technik, bei der Ressourcen wie Bilder oder JavaScript erst geladen werden, wenn sie benötigt werden, zum Beispiel wenn sie im sichtbaren Bereich der Seite (Viewport) erscheinen. Das verkürzt die initiale Ladezeit und verbessert die Benutzererfahrung, weil der Browser grosse Dateien nicht schon zu Beginn lädt.
 
-![Loading Solution](./assets/loading-solution.png)
+![Ladelösung](./assets/loading-solution.png)
 
-### Native lazy loading for images and iframes
+### Natives Lazy Loading für Bilder und iframes
 
-For images and iframes you don't need JavaScript. Add `loading="lazy"` and the browser defers the request until the element comes within a certain distance of the viewport. Every current browser supports it for both elements.
+Für Bilder und iframes brauchst du kein JavaScript. Mit `loading="lazy"` schiebt der Browser den Request auf, bis das Element einen bestimmten Abstand zum Viewport erreicht. Alle aktuellen Browser unterstützen das für beide Elemente.
 
 ```html
 <img src="item-photo.jpg" alt="Camera" width="800" height="600" loading="lazy">
 <iframe src="https://example.com/map" title="Pick-up location" loading="lazy"></iframe>
 ```
 
-Set `width` and `height`, so the browser can reserve the space before the image arrives. Never lazy-load the images visible on first load, especially the largest one: that delays your Largest Contentful Paint (LCP). For that image, `fetchpriority="high"` tells the browser to fetch it before other images.
+Setze `width` und `height`, damit der Browser den Platz reservieren kann, bevor das Bild da ist. Lade die Bilder, die beim ersten Laden sichtbar sind, nie lazy, vor allem nicht das grösste: Das verzögert deinen Largest Contentful Paint (LCP). Für dieses Bild sagt `fetchpriority="high"` dem Browser, dass er es vor anderen Bildern laden soll.
 
-Docs: [MDN: Lazy loading](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority)
+Doku: [MDN: Lazy loading](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority)
 
-For everything else (JavaScript modules, data, components) you need to know yourself when an element enters the viewport. That is the job of the `IntersectionObserver`.
+Für alles andere (JavaScript-Module, Daten, Komponenten) musst du selbst wissen, wann ein Element in den Viewport kommt. Dafür gibt es den `IntersectionObserver`.
 
 ### IntersectionObserver
 
-The `IntersectionObserver` is a JavaScript API that lets you watch when an HTML element enters or leaves the viewport. You can use it to trigger actions at exactly that moment.
+Der `IntersectionObserver` ist eine JavaScript-API, mit der du überwachst, wann ein HTML-Element in den Viewport eintritt oder ihn verlässt. Genau in diesem Moment kannst du Aktionen auslösen.
 
 ```html
 <div class="page page-1">
@@ -85,9 +85,9 @@ document.querySelectorAll(".page").forEach(page => {
 
 - [IntersectionObserver Basic](https://codesandbox.io/s/2sk7t8?file=/src/index.mjs)
 
-#### The [`rootMargin`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver/IntersectionObserver#rootmargin) option
+#### Die Option [`rootMargin`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver/IntersectionObserver#rootmargin)
 
-The `rootMargin` option defines an offset around the viewport. Use it to tell the `IntersectionObserver` to run the callback before the element actually enters the viewport. At that moment the element already counts as `isIntersecting`.
+Die Option `rootMargin` definiert einen Offset um den Viewport. Damit sagst du dem `IntersectionObserver`, dass er das Callback ausführen soll, bevor das Element den Viewport tatsächlich betritt. Das Element gilt zu diesem Zeitpunkt bereits als `isIntersecting`.
 
 ```js
 const observer = new IntersectionObserver((entries) => {
@@ -103,15 +103,15 @@ const observer = new IntersectionObserver((entries) => {
 
 **Demo** 🤯
 
-🚧 CodeSandbox has problems with `rootMargin`.
-To see the effect, open the sandbox result in a new window.
+🚧 CodeSandbox hat Probleme mit `rootMargin`.
+Um den Effekt zu sehen, öffne das Sandbox-Resultat in einem neuen Fenster.
 
-- [IntersectionObserver rootMargin (sandbox)](https://codesandbox.io/s/28rdfr?file=/src/index.mjs)
-- [IntersectionObserver rootMargin (result)](https://28rdfr.csb.app/)
+- [IntersectionObserver rootMargin (Sandbox)](https://codesandbox.io/s/28rdfr?file=/src/index.mjs)
+- [IntersectionObserver rootMargin (Resultat)](https://28rdfr.csb.app/)
 
-#### The [`threshold`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver/IntersectionObserver#threshold) option
+#### Die Option [`threshold`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver/IntersectionObserver#threshold)
 
-The `threshold` option defines how much of the element, as a fraction, must be in the viewport before it counts as `isIntersecting`. It also accepts an array of values to define several thresholds.
+Die Option `threshold` definiert, welcher Anteil des Elements im Viewport sein muss, damit es als `isIntersecting` gilt. Sie akzeptiert auch ein Array von Werten, um mehrere Schwellenwerte zu definieren.
 
 ```js
 const observer = new IntersectionObserver((entries) => {
@@ -135,9 +135,9 @@ const observer = new IntersectionObserver((entries) => {
 
 - [IntersectionObserver threshold](https://codesandbox.io/s/d2xxff?file=/src/index.mjs)
 
-#### Observing only once
+#### Nur einmal beobachten
 
-You can also use the `IntersectionObserver` to observe an element only once. As soon as the element enters the viewport for the first time, you stop observing it.
+Mit dem `IntersectionObserver` kannst du ein Element auch nur einmal beobachten. Sobald das Element zum ersten Mal den Viewport betritt, beobachtest du es nicht mehr.
 
 ```js
 const observer = new IntersectionObserver((entries, observer) => {
@@ -164,30 +164,30 @@ document.querySelectorAll(".page").forEach(page => {
 
 - [IntersectionObserver Once](https://codesandbox.io/s/ldppv2?file=/src/index.mjs)
 
-> **Key points**
+> **Das Wichtigste in Kürze**
 >  
-> * The `IntersectionObserver` runs a callback when an element enters or leaves the viewport
-> * With `rootMargin` you can run the callback before the element enters the viewport
-> * With `threshold` you define how much of the element must be in the viewport before it counts as `isIntersecting`
-> * You can use the `IntersectionObserver` for all kinds of side effects, tracking for example
+> * Der `IntersectionObserver` führt ein Callback aus, wenn ein Element in den Viewport eintritt oder ihn verlässt
+> * Mit `rootMargin` führst du das Callback aus, bevor das Element den Viewport betritt
+> * Mit `threshold` definierst du, wie viel des Elements im Viewport sein muss, damit es als `isIntersecting` gilt
+> * Du kannst den `IntersectionObserver` für alle möglichen Side Effects nutzen, zum Beispiel für Tracking
 
-**Useful links**
+**Hilfreiche Links**
 
 * [IntersectionObserver](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver)
 
-### Lazy loading in action
+### Lazy Loading in Aktion
 
-With the `IntersectionObserver` you can now implement lazy loading. You load resources such as JavaScript modules, data or images only when they are needed. This reduces the initial loading time and takes load off the main thread, which has less to process at the start. All of this improves the user experience.
+Mit dem `IntersectionObserver` kannst du jetzt Lazy Loading umsetzen. Du lädst Ressourcen wie JavaScript-Module, Daten oder Bilder erst, wenn sie gebraucht werden. Das reduziert die initiale Ladezeit und entlastet den Main Thread, der zu Beginn weniger verarbeiten muss. Beides verbessert die Benutzererfahrung.
 
 **Demo** 🤯
 
 - [Lazy Loading in action](https://codesandbox.io/s/nmm4kc?file=/src/index.js)
 
-## Lazy loading in React
+## Lazy Loading in React
 
-In React, `lazy` lets you load a component's code the first time it renders. Instead of importing the component directly with `import LazyComponent from './LazyComponent.tsx'`, you create a new component with `lazy` that runs a dynamic import of `LazyComponent`.
+In React lädst du mit `lazy` den Code einer Komponente erst, wenn sie zum ersten Mal gerendert wird. Anstatt die Komponente direkt mit `import LazyComponent from './LazyComponent.tsx'` zu importieren, erstellst du mit `lazy` eine neue Komponente, die einen dynamischen Import von `LazyComponent` ausführt.
 
-Three rules apply. The module must export the component as its `default` export. Declare the lazy component at the top level of the module, never inside another component, or its state resets on every render. And while the code is loading, the component suspends, so wrap it in a `<Suspense>` boundary with a fallback.
+Dabei gelten drei Regeln. Das Modul muss die Komponente als `default`-Export exportieren. Deklariere die Lazy-Komponente auf oberster Ebene des Moduls, nie innerhalb einer anderen Komponente, sonst wird ihr State bei jedem Render zurückgesetzt. Und während der Code lädt, suspendiert die Komponente. Pack sie deshalb in eine `<Suspense>`-Boundary mit Fallback.
 
 ```tsx
 import { lazy, Suspense } from "react";
@@ -206,9 +206,9 @@ export default function App() {
 }
 ```
 
-Docs: [react.dev: lazy](https://react.dev/reference/react/lazy), [react.dev: Suspense](https://react.dev/reference/react/Suspense)
+Doku: [react.dev: lazy](https://react.dev/reference/react/lazy), [react.dev: Suspense](https://react.dev/reference/react/Suspense)
 
-Instead of working with the `IntersectionObserver` directly in React, you can use the [`react-intersection-observer` package](https://www.npmjs.com/package/react-intersection-observer). It is actively maintained and supports React 19. It uses the `IntersectionObserver` under the hood and gives you a hook that tells you whether an element is in the viewport.
+Anstatt in React direkt mit dem `IntersectionObserver` zu arbeiten, kannst du das [`react-intersection-observer`-Package](https://www.npmjs.com/package/react-intersection-observer) nutzen. Es wird aktiv gepflegt und unterstützt React 19. Es nutzt den `IntersectionObserver` unter der Haube und stellt dir einen Hook zur Verfügung, der dir sagt, ob ein Element im Viewport ist.
 
 ```tsx
 import { lazy, Suspense } from "react";
@@ -246,44 +246,44 @@ export default function App() {
 
 **Demo** 🤯
 
-- [React Lazy with IntersectionObserver (sandbox)](https://codesandbox.io/s/dvjl33?file=/src/App.tsx)
-- [React Lazy with IntersectionObserver (result)](https://dvjl33.csb.app/)
+- [React Lazy with IntersectionObserver (Sandbox)](https://codesandbox.io/s/dvjl33?file=/src/App.tsx)
+- [React Lazy with IntersectionObserver (Resultat)](https://dvjl33.csb.app/)
 
-### Layout shifts
+### Layout Shifts
 
-As the demo shows, Page 3 behaves strangely: it moves down as soon as the component on Page 2 has loaded. This is called a layout shift. Layout shifts hurt the user experience a lot, because the content of the page suddenly jumps. They also cost you in SEO ([Cumulative Layout Shift](https://web.dev/articles/cls)).
+Wie die Demo zeigt, verhält sich Page 3 merkwürdig: Sie rutscht nach unten, sobald die Komponente auf Page 2 geladen ist. Das nennt man einen Layout Shift. Layout Shifts beeinträchtigen die Benutzererfahrung erheblich, weil der Inhalt der Seite plötzlich springt. Sie kosten dich auch beim SEO ([Cumulative Layout Shift](https://web.dev/articles/cls)).
 
-Layout shifts happen when elements on the page are not ready yet when the user first sees them. But sometimes we don't want to show content from the start. So what can we do against these layout shifts?
+Layout Shifts entstehen, wenn Elemente auf der Seite noch nicht bereit sind, wenn der Benutzer sie zum ersten Mal sieht. Manchmal wollen wir Inhalte aber gar nicht von Anfang an anzeigen. Was können wir also gegen diese Layout Shifts tun?
 
 **Demo** 🤯
 
-- [Pokémon list with layout shifts (sandbox)](https://codesandbox.io/s/kzdh37?file=/src/App.tsx)
-- [Pokémon list with layout shifts (result)](https://kzdh37.csb.app/)
+- [Pokémon-Liste mit Layout Shifts (Sandbox)](https://codesandbox.io/s/kzdh37?file=/src/App.tsx)
+- [Pokémon-Liste mit Layout Shifts (Resultat)](https://kzdh37.csb.app/)
 
-The demo shows that the many Pokémon names on screen trigger our `useInView` hooks, so the app loads data for far too many Pokémon. That is not what we want.
+Die Demo zeigt: Die vielen Pokémon-Namen auf dem Bildschirm lösen unsere `useInView`-Hooks aus, und die App lädt Daten für viel zu viele Pokémon.
 
-The solution is to reserve the space for the content from the start. One way to do this is with skeletons. A skeleton looks roughly like the real content, without the details. Because we don't know what content the backend will return, we can only reserve the space approximately. That is not perfect, but much better than nothing.
+Die Lösung ist, den Platz für den Inhalt von Anfang an zu reservieren. Eine Möglichkeit dafür sind Skeletons. Ein Skeleton sieht ungefähr aus wie der echte Inhalt, nur ohne die Details. Weil wir nicht wissen, welchen Inhalt das Backend liefert, können wir den Platz nur ungefähr reservieren. Das ist nicht perfekt, aber deutlich besser als nichts.
 
 ![Skeletons](./assets/skeletons.png)
 
-**Useful links**
+**Hilfreiche Links**
 
 - [Skeleton Screen - Galaxus](https://www.galaxus.ch/designsystem/patterns/skeleton-screen)
 
-## Putting it all together
+## Alles kombinieren
 
-Let's combine everything. The result performs well and gives the user a good experience.
+Kombiniert ergibt das eine Lösung, die performant ist und dem Benutzer eine gute Erfahrung bietet.
 
-- [Pokémon list with skeletons (sandbox)](https://codesandbox.io/s/58tdkj?file=/src/Pokemon.tsx)
-- [Pokémon list with skeletons (result)](https://58tdkj.csb.app/)
+- [Pokémon-Liste mit Skeletons (Sandbox)](https://codesandbox.io/s/58tdkj?file=/src/Pokemon.tsx)
+- [Pokémon-Liste mit Skeletons (Resultat)](https://58tdkj.csb.app/)
 
-## Load before the click: prefetching
+## Vor dem Klick laden: Prefetching
 
-Lazy loading saves work on the current page. It has a cost on the next one: when the user clicks a link, the code and data for that page have not been loaded yet, and the user waits. Prefetching means loading the resources for a likely next step in the background, before the user asks for it.
+Lazy Loading spart Arbeit auf der aktuellen Seite. Den Preis zahlst du auf der nächsten: Wenn der Benutzer auf einen Link klickt, sind Code und Daten für diese Seite noch nicht geladen, und er wartet. Prefetching heisst, die Ressourcen für einen wahrscheinlichen nächsten Schritt im Hintergrund zu laden, bevor der Benutzer danach fragt.
 
-### Prefetch on intent
+### Prefetching bei Absicht
 
-The strongest signal is the user's own behaviour. When the pointer rests on a link, or the link gets keyboard focus, a click is likely. Start a short timer (about 100 ms) on `mouseenter` and `focus`, and cancel it on `mouseleave` and `blur`. The delay filters out the pointer passing over a link on its way somewhere else. On touch screens there is no hover, so prefetch on `touchstart`: it fires a moment before the click.
+Das stärkste Signal ist das Verhalten des Benutzers selbst. Ruht der Mauszeiger auf einem Link oder bekommt der Link den Tastaturfokus, ist ein Klick wahrscheinlich. Starte bei `mouseenter` und `focus` einen kurzen Timer (etwa 100 ms) und brich ihn bei `mouseleave` und `blur` ab. Die Verzögerung filtert den Mauszeiger heraus, der nur auf dem Weg woandershin über einen Link fährt. Auf Touchscreens gibt es kein Hover, also lade bei `touchstart` vor: Das Event feuert einen Moment vor dem Klick.
 
 ```tsx
 import { useEffect, useRef } from "react";
@@ -325,25 +325,25 @@ export function usePrefetchOnIntent<T extends HTMLElement>(prefetch: () => void)
 }
 ```
 
-Pass a stable function, for example one wrapped in `useCallback`, and put the returned `ref` on the link. Inside the function you call whatever loads the next step: a `fetch()` for the data of the next page, or the `import()` of a lazy component.
+Übergib eine stabile Funktion, zum Beispiel eine in `useCallback` gewrappte, und setze das zurückgegebene `ref` auf den Link. In der Funktion rufst du auf, was den nächsten Schritt lädt: ein `fetch()` für die Daten der nächsten Seite oder den `import()` einer Lazy-Komponente.
 
-### Prefetch when the browser is idle
+### Prefetching, wenn der Browser idle ist
 
-Some links are likely without any hover, such as the "next page" link of a list. You can prefetch them when the browser has nothing else to do. `requestIdleCallback` runs a callback in an idle period of the main thread. Give it a `timeout`, or the callback may wait for seconds. Safari does not support it yet, so fall back to `setTimeout`.
+Manche Links sind auch ohne Hover wahrscheinlich, etwa der "Nächste Seite"-Link einer Liste. Diese kannst du vorladen, wenn der Browser nichts anderes zu tun hat. `requestIdleCallback` führt ein Callback in einer Leerlaufphase des Main Threads aus. Gib ihm ein `timeout` mit, sonst wartet das Callback unter Umständen sekundenlang. Safari unterstützt es noch nicht, nimm dort `setTimeout` als Fallback.
 
-Combine both conditions: prefetch a link only when it is in the viewport *and* the browser is idle. Observe the link with an `IntersectionObserver`. When it enters the viewport, schedule the prefetch with `requestIdleCallback`. When it leaves before the callback has run, cancel it with `cancelIdleCallback`. This way, a user who scrolls quickly through a long list does not trigger a prefetch for every link on the way.
+Kombiniere beide Bedingungen: Lade einen Link nur vor, wenn er im Viewport ist *und* der Browser idle ist. Beobachte den Link mit einem `IntersectionObserver`. Kommt er in den Viewport, plane das Prefetching mit `requestIdleCallback` ein. Verlässt er den Viewport, bevor das Callback gelaufen ist, brich es mit `cancelIdleCallback` ab. So löst ein Benutzer, der schnell durch eine lange Liste scrollt, nicht für jeden Link unterwegs ein Prefetching aus.
 
-Docs: [MDN: requestIdleCallback](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
+Doku: [MDN: requestIdleCallback](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
 
-### Why prefetching everything hurts
+### Warum alles vorzuladen schadet
 
-Prefetching is a bet: you spend the user's bandwidth, data plan and CPU on a page they might open. Every prefetch that is never used is waste. Worse, prefetches compete with the requests that matter now: the LCP image, the data for the page the user is looking at, the JavaScript that makes it interactive. On a slow mobile connection, a page with 50 prefetched links can feel slower than one with none. Your servers also pay: every prefetch is a request they have to answer, often a full page render.
+Prefetching ist eine Wette: Du setzt Bandbreite, Datenvolumen und CPU des Benutzers für eine Seite ein, die er vielleicht öffnet. Jedes Prefetching, das nie genutzt wird, ist verschwendet. Schlimmer noch: Prefetches konkurrieren mit den Requests, die jetzt zählen, also dem LCP-Bild, den Daten für die Seite, die der Benutzer gerade ansieht, und dem JavaScript, das sie interaktiv macht. Auf einer langsamen mobilen Verbindung kann sich eine Seite mit 50 vorgeladenen Links langsamer anfühlen als eine ohne. Auch deine Server zahlen: Jedes Prefetching ist ein Request, den sie beantworten müssen, oft ein vollständiges Rendering der Seite.
 
-That is why large sites don't guess. They run A/B tests that compare prefetching strategies against real user metrics and server cost. Often the result is to turn blanket link prefetching off and keep only targeted prefetching on intent or for a few high-value links.
+Deshalb raten grosse Websites nicht. Sie vergleichen Prefetching-Strategien in A/B-Tests anhand echter Benutzermetriken und Serverkosten. Oft ist das Ergebnis, pauschales Link-Prefetching abzuschalten und nur gezieltes Prefetching bei Absicht oder für wenige wertvolle Links zu behalten.
 
-### The platform option: Speculation Rules API
+### Die Lösung der Plattform: Speculation Rules API
 
-The browser can do this for you. With the Speculation Rules API you describe in JSON which links the browser may prefetch (download the page's HTML) or prerender (load and render the whole page in a hidden tab). `eagerness` decides when: `conservative` on pointer or touch down, `moderate` after about 200 ms of hover on desktop, `eager` and `immediate` earlier.
+Der Browser kann das für dich übernehmen. Mit der Speculation Rules API beschreibst du in JSON, welche Links der Browser vorladen (das HTML der Seite herunterladen) oder vorrendern (die ganze Seite in einem versteckten Tab laden und rendern) darf. `eagerness` bestimmt den Zeitpunkt: `conservative` bei Pointer- oder Touch-Down, `moderate` nach etwa 200 ms Hover auf dem Desktop, `eager` und `immediate` früher.
 
 ```html
 <script type="speculationrules">
@@ -356,14 +356,14 @@ The browser can do this for you. With the Speculation Rules API you describe in 
 </script>
 ```
 
-The rules apply to full document navigations, so they suit multi-page sites more than client-side navigation in a single-page app. As of October 2026, Chrome and Edge support them fully. Safari 26.2 and later supports prefetch only behind a feature flag, and Firefox only in preview builds. Browsers without support ignore the script, so you can add it safely as a progressive enhancement.
+Die Regeln gelten für vollständige Dokument-Navigationen. Sie passen deshalb besser zu Multi-Page-Sites als zur clientseitigen Navigation in einer Single-Page-App. Stand Oktober 2026 unterstützen Chrome und Edge sie vollständig. Safari ab 26.2 unterstützt Prefetch nur hinter einem Feature Flag, Firefox nur in Preview-Builds. Browser ohne Unterstützung ignorieren das Script, du kannst es also gefahrlos als Progressive Enhancement einbauen.
 
-Docs: [MDN: Speculation Rules API](https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API), [Chrome for Developers: Prerender pages](https://developer.chrome.com/docs/web-platform/prerender-pages)
+Doku: [MDN: Speculation Rules API](https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API), [Chrome for Developers: Prerender pages](https://developer.chrome.com/docs/web-platform/prerender-pages)
 
-## Summary
+## Zusammenfassung
 
-* Load only what the user needs now. Defer the rest until it is about to enter the viewport.
-* For images and iframes, use `loading="lazy"`, but never for the content visible on first load.
-* For components and data, detect the viewport with the `IntersectionObserver` (or `react-intersection-observer`), and load the code with `lazy` inside a `<Suspense>` boundary.
-* Reserve the space for lazy content with dimensions or skeletons, so the page does not shift.
-* Prefetch the next step on intent or when the browser is idle, not everything at once, and measure whether it helps.
+* Lade nur, was der Benutzer jetzt braucht. Schiebe den Rest auf, bis er gleich in den Viewport kommt.
+* Nutze für Bilder und iframes `loading="lazy"`, aber nie für Inhalte, die beim ersten Laden sichtbar sind.
+* Erkenne für Komponenten und Daten den Viewport mit dem `IntersectionObserver` (oder `react-intersection-observer`) und lade den Code mit `lazy` innerhalb einer `<Suspense>`-Boundary.
+* Reserviere den Platz für Lazy-Inhalte mit Abmessungen oder Skeletons, damit die Seite nicht springt.
+* Lade den nächsten Schritt bei Absicht oder im Idle-Zustand des Browsers vor, nicht alles auf einmal, und miss, ob es hilft.

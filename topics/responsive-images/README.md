@@ -1,77 +1,77 @@
-# Responsive images: the implementation on post.ch and css.ch
+# Responsive Images: Die Umsetzung auf post.ch und css.ch
 
-> A 400 px wide image on a phone with a 3x display needs 1200 real pixels, and a wrong `srcset` sends a desktop-sized file over a mobile connection. We look at density and width descriptors, the `sizes` attribute, and `<picture>` for art direction and modern formats like AVIF. Then we look at how post.ch and css.ch calculate `sizes` for images in a 12-column grid. You practise the calculation yourself in a sandbox.
+> Ein 400 px breites Bild braucht auf einem Smartphone mit 3x-Display 1200 echte Pixel, und ein falsches `srcset` schickt eine Datei in Desktop-Grösse über die Mobilverbindung. Wir schauen uns Density und Width Descriptors an, das `sizes`-Attribut und `<picture>` für Art Direction und moderne Formate wie AVIF. Danach schauen wir, wie post.ch und css.ch die `sizes` für Bilder in einem 12-Spalten-Grid berechnen. Die Berechnung übst du selbst in einer Sandbox.
 
-**Duration:** about 90 minutes
+**Dauer:** etwa 90 Minuten
 
-## Contents
+## Inhalt
 
 * [Intro](#intro)
-* [Responsive images](#responsive-images)
-* [Implementation](#implementation)
+* [Responsive Images](#responsive-images)
+* [Umsetzung](#umsetzung)
 
 ## Intro
 
-In this chapter we look at the responsive images implementation used on [post.ch](https://post.ch) and [css.ch](https://www.css.ch). The examples use code excerpts from both projects.
+Wir schauen uns die Umsetzung von Responsive Images an, die auf [post.ch](https://post.ch) und [css.ch](https://www.css.ch) verwendet wird. Die Beispiele zeigen Codeausschnitte aus beiden Projekten.
 
-## Responsive images
+## Responsive Images
 
-### Recap: high-resolution displays
+### Recap: Hochauflösende Displays
 
-You might assume that smaller devices should always get smaller images. That is not always the case.
+Man könnte annehmen, dass kleinere Devices immer kleinere Bilder bekommen sollten. Das ist nicht immer der Fall.
 
 > "A pixel is not a pixel"
 
-There is a difference between **CSS pixels** and **screen pixels**. CSS pixels are the unit for dimensions on our website. Screen pixels are the physical pixels the device uses.
+Es gibt einen Unterschied zwischen **CSS-Pixeln** und **Screen-Pixeln**. CSS-Pixel sind die Einheit für Abmessungen auf unserer Website. Screen-Pixel sind die physischen Pixel, die das Device nutzt.
 
-![Pixel Density](./assets/pixel-density.jpg)
+![Pixeldichte](./assets/pixel-density.jpg)
 
-**Device pixel ratio (DPR) examples**
+**Beispiele für Device Pixel Ratio (DPR)**
 
-| Device | Native pixels | CSS pixels | Device pixel ratio (DPR) |
+| Device | Native Pixel | CSS-Pixel | Device Pixel Ratio (DPR) |
 |---|--:|--:|:-:|
 | iPhone 6, 6s, 7, 8, SE (2020) | 750 x 1334 | 375 x 667 | 2 |
 | iPhone 11 Pro, X, XS | 1125 x 2436 | 375 x 812 | 3 |
 | iPad Air 2020 | 2360 x 1640 | 1180 x 820 | 2 |
 
-**Delivering sharp images**
+**Scharfe Bilder liefern**
 
-What does this mean? How large do our images have to be so they don't look blurry on these devices?
+Wie gross müssen unsere Bilder also sein, damit sie auf diesen Devices nicht verschwommen aussehen?
 
-| CSS pixels | DPR 1.0 | DPR 2.0 (4x px) | DPR 3.0 (9x px) | DPR 4.0 (16x px) |
+| CSS-Pixel | DPR 1.0 | DPR 2.0 (4x px) | DPR 3.0 (9x px) | DPR 4.0 (16x px) |
 |--:|--:|--:|--:|--:|
 | 40px | 40px | 80px | 120px | 160px |
 | 150px | 150px | 300px | 450px | 600px |
 | 400px | 400px | 800px | 1200px | 1600px |
 
-The table shows that at a pixel ratio of **3x** or **4x**, **the image size grows quickly** if the image is to look sharp. That is not ideal, because mobile devices usually have weaker hardware than desktop devices. On top of that, the mobile connection may be slower, which makes the problem worse.
+Die Tabelle zeigt: Bei einem Pixel Ratio von **3x** oder **4x** **wächst die Bildgrösse schnell**, wenn das Bild scharf aussehen soll. Das ist ungünstig, weil in mobilen Geräten meist schwächere Hardware steckt als in Desktop-Geräten. Dazu kommt eine eventuell langsamere Mobilverbindung, was das Problem verstärkt.
 
-**Unusual DPRs**
+**Ungewöhnliche DPRs**
 
-So far every device had a whole-number DPR (2.0, 3.0, and so on). Is there also a DPR of, say, 1.5? Yes, there is.
+Bisher hatte jedes Device eine ganzzahlige DPR (2.0, 3.0 usw.). Gibt es auch eine DPR von z.B. 1.5? Ja, die gibt es.
 
-![MacBook 16" DPR](./assets/macbook-16-dpr.png)
+![DPR eines MacBook 16"](./assets/macbook-16-dpr.png)
 
-For example, you can set up a 16" MacBook Pro so that it has a DPR of **1.5** instead of 2.0.  
-This means that to show an image at 40px on this laptop, the "perfect" image would be 60px wide, not 80px as with a DPR of 2.0.
+Ein MacBook Pro 16" lässt sich zum Beispiel so einstellen, dass es eine DPR von **1.5** statt 2.0 hat.  
+Um auf diesem Laptop ein Bild in 40px darzustellen, wäre das "perfekte" Bild also 60px breit, und nicht 80px wie bei einer DPR von 2.0.
 
-### The difficulties
+### Die Schwierigkeiten
 
-With responsive images, watch out for these difficulties:
+Bei Responsive Images musst du auf folgende Schwierigkeiten achten:
 
-- Smaller devices should generally get smaller images
-- Use the device pixel ratio so that images are as sharp as possible, without the image payload exploding
-- Depending on the module or use case, the image's aspect ratio can change from device to device
-- Browsers support different file formats. How can we handle and use that?
+- Kleinere Devices sollten generell kleinere Bilder erhalten
+- Die Device Pixel Ratio sollte so genutzt werden, dass Bilder möglichst scharf sind, ohne dass die Payload des Bildes explodiert
+- Je nach Modul oder Use Case kann sich das Seitenverhältnis des Bildes von Device zu Device ändern
+- Browser unterstützen unterschiedliche Dateiformate. Wie können wir damit umgehen und das nutzen?
 
-### The display density descriptor method
+### Die Display Density Descriptor Methode
 
-You can use the density descriptor inside a `srcset`. It gives the browser metadata so it can decide which image to download.  
-In the example below, an iPhone 6 (DPR 2) would load `cat-400px.jpg`. An iPhone X (DPR 3) would load `cat-600px.jpg`.
+Den Density Descriptor kannst du innerhalb eines `srcset` nutzen. Er gibt dem Browser Metainformationen, damit dieser entscheiden kann, welches Bild er herunterlädt.  
+Im Beispiel unten würde ein iPhone 6 (DPR 2) das Bild `cat-400px.jpg` laden, ein iPhone X (DPR 3) das Bild `cat-600px.jpg`.
 
-*Note that the descriptor only tells the browser which image is meant for which DPR. It tells the browser nothing about how wide the image is.*
+*Wichtig: Der Descriptor sagt dem Browser nur, welches Bild für welche DPR gedacht ist. Wie breit das Bild ist, erfährt der Browser dadurch nicht.*
 
-**Example**
+**Beispiel**
 
 ```html
 <img src="cat-200px.jpg" width="200" alt=""
@@ -81,29 +81,29 @@ In the example below, an iPhone 6 (DPR 2) would load `cat-400px.jpg`. An iPhone 
              cat-800px.jpg 4x">
 ```
 
-**Pros**
+**Vorteile**
 
-This descriptor lets us force an image on the browser. Images look sharp, no matter which device we are on.
+Mit diesem Descriptor können wir dem Browser ein Bild aufzwingen. Bilder werden scharf angezeigt, egal auf welchem Device wir uns befinden.
 
-**Cons**
+**Nachteile**
 
-A device with a DPR of, say, 1.5 always downloads the next larger image. On our 16" MacBook with a DPR of 1.5, the browser has to download an image that is too large to show it sharply.
+Ein Device mit einer DPR von z.B. 1.5 lädt immer das nächstgrössere Bild herunter. Auf unserem MacBook 16" mit einer DPR von 1.5 muss der Browser also ein zu grosses Bild laden, damit es scharf angezeigt wird.
 
 **Demo** 🤯
 
 - [Display Density Descriptor](https://codesandbox.io/s/yb5t4)
 
-**Useful links**
+**Hilfreiche Links**
 
 * [Use density descriptors](https://web.dev/articles/codelab-density-descriptors)
 
-### The width descriptor method with the `sizes` attribute
+### Die Width Descriptor Methode mit dem `sizes`-Attribut
 
-Here we combine the width descriptor with the `sizes` attribute.  
-The width descriptor lets us tell the browser how wide each image file is.  
-This method is most useful when the width of an image changes with the size of the viewport. **This is the most common case for responsive images**.
+Hier kombinieren wir den Width Descriptor mit dem `sizes`-Attribut.  
+Mit dem Width Descriptor sagen wir dem Browser, wie breit jede Bilddatei ist.  
+Diese Methode ist vor allem dann sinnvoll, wenn sich die Breite eines Bildes mit der Grösse des Viewports ändert. **Das ist der häufigste Fall bei Responsive Images**.
 
-**Example**
+**Beispiel**
 
 ```html
 <img src="cat-200px.jpg" alt=""
@@ -113,22 +113,22 @@ This method is most useful when the width of an image changes with the size of t
              cat-800px.jpg 800w">
 ```
 
-On its own, this information doesn't help the browser much, because it doesn't know yet how wide the image will be displayed. Because the displayed width changes with the width of the viewport, we can't use a `width` attribute either.
+Diese Information allein nützt dem Browser wenig, da er noch nicht weiss, wie breit das Bild angezeigt wird. Weil sich die Anzeigebreite mit der Breite des Viewports ändert, können wir auch kein `width`-Attribut verwenden.
 
-#### The `sizes` attribute
+#### Das `sizes`-Attribut
 
-The `sizes` attribute tells the browser how wide an image is actually displayed. It takes either one value or several, separated by a **,** (comma). You can use media queries inside the attribute. With several values, the browser evaluates them from *left to right*. As soon as a media query matches, it uses that size as the display width of the image.
+Das `sizes`-Attribut teilt dem Browser mit, wie breit ein Bild effektiv dargestellt wird. Es nimmt entweder einen Wert oder mehrere, getrennt durch ein **,** (Komma). Im Attribut kannst du Media Queries verwenden. Bei mehreren Werten wertet der Browser sie von *links nach rechts* aus. Sobald eine Media Query zutrifft, nutzt er diese Grösse als Anzeigebreite des Bildes.
 
-![Sizes Attr](./assets/sizes-attr.png)
+![Das sizes-Attribut](./assets/sizes-attr.png)
 
-**Image size condition**
+**Bedingung für die Bildgrösse**
 
-There are three ways to give the width:
+Es gibt drei Arten, die Breite anzugeben:
 - In `vw`
 - In `px`
-- A combination of both, wrapped in `calc()`
+- Als Kombination von beiden, verpackt in einem `calc()`
 
-**Example**
+**Beispiel**
 
 ```html
 sizes="(max-width: 399px) 50vw,
@@ -136,7 +136,7 @@ sizes="(max-width: 399px) 50vw,
        100vw"
 ```
 
-The next example shows an image whose width is always relative to the viewport, until the viewport reaches a certain size. From there the image width is fixed and doesn't grow any further.
+Das nächste Beispiel zeigt ein Bild, dessen Breite immer relativ zum Viewport ist, bis der Viewport eine bestimmte Grösse erreicht. Ab dann ist die Breite des Bildes fix und wird nicht mehr grösser.
 
 ```html
 <img src="cat.jpg" alt="" 
@@ -149,9 +149,9 @@ The next example shows an image whose width is always relative to the viewport, 
              100vw">
 ```
 
-With the information about the **available images** and the **width** at which the image is displayed, the browser can now decide which image to download so it looks as sharp as possible. For this it also uses the device's **DPR** and, for example, the connection speed.
+Mit den Informationen über die **verfügbaren Bilder** und die **Breite**, in der das Bild angezeigt wird, kann der Browser nun entscheiden, welches Bild er herunterlädt, damit es möglichst scharf aussieht. Dafür nutzt er auch die **DPR** des Device und z.B. die Verbindungsgeschwindigkeit.
 
-**Avatar example**
+**Avatar-Beispiel**
 
 ```html
 <img src="avatar.jpg" alt="" 
@@ -165,7 +165,7 @@ With the information about the **available images** and the **width** at which t
              40px">
 ```
 
-| Viewport width | DPR | Display width | Image |
+| Viewport-Breite | DPR | Anzeigebreite | Bild |
 |---|--:|--:|:--|
 | `300px` | 2 | `40px` | `avatar-80px.jpg` |
 | `600px` | 3 | `40px` | `avatar-120px.jpg` |
@@ -177,19 +177,19 @@ With the information about the **available images** and the **width** at which t
 
 - [Width Descriptor](https://codesandbox.io/s/0erxg)
 
-### The `<picture>` element
+### Das `<picture>`-Element
 
-The `<picture>` element gives us even more options for art direction. For example, you can show an image in a 1:1 aspect ratio on mobile and in 16:9 on desktop. It also lets us offer several file formats, so browsers can pick the best format they support, with a fallback for the rest.
+Das `<picture>`-Element gibt uns noch mehr Möglichkeiten für Art Direction. So kannst du z.B. ein Bild auf Mobile im Seitenverhältnis 1:1 und auf dem Desktop in 16:9 zeigen. Ausserdem können wir damit mehrere Dateiformate anbieten: Browser wählen das beste Format, das sie unterstützen, und alle anderen bekommen einen Fallback.
 
-### Art direction with the `<picture>` element
+### Art Direction mit dem `<picture>`-Element
 
-With the `<source>` element you can list several different images inside the `<picture>` element, each for different devices. You can use as many `<source>` elements as you like.
+Mit dem `<source>`-Element kannst du innerhalb des `<picture>`-Elements mehrere verschiedene Bilder angeben, jeweils für unterschiedliche Devices. Du kannst beliebig viele `<source>`-Elemente verwenden.
 
-![Picture Sources](./assets/sources.png)
+![Sources im picture-Element](./assets/sources.png)
 
-With several `<source>` elements, the browser evaluates them from *first to last*. As soon as it finds a `<source>` that meets all criteria, it uses that image.
+Bei mehreren `<source>`-Elementen wertet der Browser sie von *der ersten bis zur letzten* aus. Sobald er eine `<source>` findet, die alle Kriterien erfüllt, verwendet er dieses Bild.
 
-**Example**
+**Beispiel**
 
 ```html
 <picture>
@@ -201,14 +201,14 @@ With several `<source>` elements, the browser evaluates them from *first to last
 </picture>
 ```
 
-### Supporting different file formats
+### Verschiedene Dateiformate unterstützen
 
-A `<source>` also lets us offer the same image in different file formats.  
-If a browser doesn't support the given `type`, it ignores the whole source.
+Mit einer `<source>` können wir dasselbe Bild auch in verschiedenen Dateiformaten anbieten.  
+Unterstützt ein Browser den angegebenen `type` nicht, ignoriert er die ganze Source.
 
-AVIF usually gives the smallest files, followed by WebP. Both work in every current browser: AVIF has been Baseline since January 2024, WebP since 2020. The JPEG in the `<img>` stays the fallback for everything else.
+AVIF ergibt meist die kleinsten Dateien, gefolgt von WebP. Beide funktionieren in allen aktuellen Browsern: AVIF ist seit Januar 2024 Baseline, WebP seit 2020. Das JPEG im `<img>` bleibt der Fallback für alles andere.
 
-**Example**
+**Beispiel**
 
 ```html
 <picture>
@@ -219,21 +219,21 @@ AVIF usually gives the smallest files, followed by WebP. Both work in every curr
 </picture>
 ```
 
-Docs: [MDN: Image file type and format guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types), [MDN: `<picture>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture)
+Doku: [MDN: Image file type and format guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types), [MDN: `<picture>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture)
 
-**Useful links**
+**Hilfreiche Links**
 
 * [AVIF has landed](https://jakearchibald.com/2020/avif-has-landed/)
 * [Using WebP Images](https://css-tricks.com/using-webp-images/)
 
-### Loading and priority
+### Laden und Priorität
 
-The right file is only half of the work. The browser also needs to know when to load it.
+Die richtige Datei ist erst die halbe Arbeit. Der Browser muss auch wissen, wann er sie laden soll.
 
-- **Reserve the space.** Set `width` and `height` to the intrinsic size of the image. The browser derives the aspect ratio from them and reserves the space before the file arrives, so the page doesn't shift.
-- **Lazy-load what is below the fold.** `loading="lazy"` defers the download until the image comes close to the viewport. Every current browser supports it.
-- **Never lazy-load the largest image on first load.** That image is often your Largest Contentful Paint (LCP). Leave it eager and add `fetchpriority="high"`, so the browser fetches it before other images.
-- **Let the browser measure lazy images.** For lazy images you can start `sizes` with `auto`: the browser uses the image's actual layout width. Chrome, Edge and Firefox support it, and Safari 27 added it with a known bug, so keep your calculated `sizes` after `auto` as the fallback.
+- **Platz reservieren.** Setze `width` und `height` auf die intrinsische Grösse des Bildes. Der Browser leitet daraus das Seitenverhältnis ab und reserviert den Platz, bevor die Datei ankommt, damit die Seite nicht verspringt.
+- **Was unterhalb des Folds liegt, lazy laden.** `loading="lazy"` verzögert den Download, bis das Bild in die Nähe des Viewports kommt. Alle aktuellen Browser unterstützen das.
+- **Das grösste Bild beim ersten Laden nie lazy laden.** Dieses Bild ist oft dein Largest Contentful Paint (LCP). Lass es eager und ergänze `fetchpriority="high"`, damit der Browser es vor anderen Bildern holt.
+- **Lazy Images vom Browser messen lassen.** Bei Lazy Images kannst du `sizes` mit `auto` beginnen: Der Browser nimmt dann die tatsächliche Layout-Breite des Bildes. Chrome, Edge und Firefox unterstützen das, Safari 27 hat es mit einem bekannten Bug eingeführt. Lass deshalb deine berechneten `sizes` als Fallback nach `auto` stehen.
 
 ```html
 <img src="cat-400px.jpg" alt="" width="800" height="600" loading="lazy"
@@ -241,68 +241,68 @@ The right file is only half of the work. The browser also needs to know when to 
      sizes="auto, (min-width: 800px) 50vw, 100vw">
 ```
 
-Docs: [MDN: `<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority)
+Doku: [MDN: `<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority)
 
-### Practice 🔥
+### Übung 🔥
 
-Open this [**CodeSandbox**](https://codesandbox.io/s/xc76o) as your starting point.
+Öffne diese [**CodeSandbox**](https://codesandbox.io/s/xc76o) als Startpunkt.
 
-The exercise already includes the Bootstrap grid system.
+Die Übung enthält bereits das Grid-System von Bootstrap.
 
-- [ ] Add a responsive image, using the image files in `./images/`
-  - [ ] The image should be 12 columns wide on xs, 6 columns on rg, and 4 columns from lg upwards
-  - [ ] Calculate the sizes correctly, so the size is right on every breakpoint.  
-  Look at the CSS as well, to see how much padding the container, the row and the col have. Take these values into account when you calculate the size.
+- [ ] Füge ein Responsive Image ein und nimm dafür die Bilddateien unter `./images/`
+  - [ ] Das Bild sollte auf xs 12 Spalten breit sein, auf rg 6 Spalten und ab lg 4 Spalten
+  - [ ] Berechne die sizes so, dass die Grösse auf jedem Breakpoint stimmt.  
+  Schau dir dazu auch das CSS an: Wie viel Padding haben der Container, die Row und die Col? Berücksichtige diese Werte bei der Berechnung.
 
-Time: about 15 min
+Zeit: etwa 15 min
 
-## Implementation
+## Umsetzung
 
-Today we look at the specific implementation on [css.ch](https://www.css.ch).
+Wir schauen uns die konkrete Umsetzung auf [css.ch](https://www.css.ch) an.
 
-### Modularity
+### Modularität
 
-In our implementation we want a generic component, so we avoid duplication and keep the quality of the image HTML consistent.  
-The component should behave like an **atom** and be usable in every other module or component.
+Für unsere Umsetzung wollen wir eine generische Komponente, damit wir Redundanzen vermeiden und die Qualität des Bild-HTML einheitlich bleibt.  
+Die Komponente sollte sich wie ein **Atom** verhalten und in allen anderen Modulen und Komponenten verwendbar sein.
 
-### Art direction
+### Art Direction
 
-On the one hand, we have many different aspect ratios that can appear in the various modules.  
+Zum einen haben wir viele verschiedene Seitenverhältnisse, die in den verschiedenen Modulen vorkommen können.  
 
-![Image-Ratios](./assets/design-ratios.png)
+![Seitenverhältnisse im Design](./assets/design-ratios.png)
 
-*Screenshot from the design*
+*Screenshot aus dem Design*
 
-On the other hand, some modules have a different aspect ratio on breakpoint x than on breakpoint y.
+Zum anderen gibt es Module, die auf Breakpoint x ein anderes Seitenverhältnis haben als auf Breakpoint y.
 
-![Design Art Direction](./assets/design-art-direction.png)
+![Art Direction im Design](./assets/design-art-direction.png)
 
-*Screenshot from the design*
+*Screenshot aus dem Design*
 
 ### `srcset` & `sizes`
 
-#### Working with a grid
+#### Arbeiten mit einem Grid
 
-With a grid, images often span a number of columns.  
-In this example, the second module is 8/8 columns wide on tablet, 6/8 columns on smaller desktops, and finally 8/12 columns on larger desktops.
+In einem Grid erstrecken sich Bilder oft über eine bestimmte Anzahl Spalten.  
+In diesem Beispiel ist das zweite Modul auf Tablet 8/8 Spalten breit, auf kleineren Desktops 6/8 Spalten und auf grösseren Desktops schliesslich 8/12 Spalten.
 
-![Example Grid](./assets/image-ratio-grid.png)
+![Beispiel-Grid](./assets/image-ratio-grid.png)
 
-To calculate the `sizes` correctly, we have to take several parameters into account:
-- The width of the container
-- The maximum width of the container
-- The number of columns on each breakpoint
-- The gutter between the columns
+Damit wir die `sizes` richtig berechnen können, müssen wir mehrere Parameter berücksichtigen:
+- Die Breite des Containers
+- Die Maximalbreite des Containers
+- Die Spaltenanzahl auf jedem Breakpoint
+- Den Gutter zwischen den Spalten
 
-With all these parameters, a size could look like this:
+Mit all diesen Parametern könnte eine Size so aussehen:
 
-**Structure**
+**Struktur**
 
 ```html
 sizes="(min-width: {breakpoint-width}) calc(({base} - 2 * {container-padding} + {gutter}) * ({columns}/{max-columns}) - {gutter})"
 ```
 
-**Example**
+**Beispiel**
 
 ```html
 sizes="(min-width: 1441px) calc((1440px - 2 * 128px + 16px) * (3/12) - 16px)"
@@ -312,11 +312,11 @@ sizes="(min-width: 1441px) calc((1440px - 2 * 128px + 16px) * (3/12) - 16px)"
 
 - [Proof of Concept](https://codepen.io/christiansany/pen/jQGjwd)
 
-*The proof of concept was built for post.ch. Its sizes don't match those of css.ch exactly, but it illustrates the principle.*
+*Der Proof of Concept wurde für post.ch gebaut. Seine sizes stimmen nicht genau mit denen von css.ch überein, aber das Prinzip wird sichtbar.*
 
-#### Calculating the `sizes`
+#### Die `sizes` berechnen
 
-**Calculating the sizes inside a grid is not always straightforward.** That is why we built a **helper**: you pass the number of columns the image spans, and the helper returns the correct `sizes`.  
+**Die sizes innerhalb eines Grids zu berechnen, ist nicht immer trivial.** Deshalb haben wir einen **Helper** gebaut: Du übergibst die Anzahl Spalten, über die sich das Bild erstreckt, und der Helper gibt die richtigen `sizes` zurück.  
 
 ```typescript
 export type BreakpointName = "large" | "medium" | "small";
@@ -418,7 +418,7 @@ export const mapImageSizesToColumns = (
 };
 ```
 
-**Example**
+**Beispiel**
   
 ```ts
 const sizes = mapImageSizesToColumns([
@@ -435,15 +435,15 @@ const sizes = mapImageSizesToColumns([
 
 **Demo** 🤯
 
-- [🌟 React Demo](https://codesandbox.io/p/sandbox/n8mczn?file=%2Fsrc%2FApp.tsx)
-- [Playground Demo](https://codesandbox.io/s/o04l7)
-- [Live Demo post.ch](https://www.post.ch)
-- [Live Demo css.ch](https://www.css.ch)
+- [🌟 React-Demo](https://codesandbox.io/p/sandbox/n8mczn?file=%2Fsrc%2FApp.tsx)
+- [Playground-Demo](https://codesandbox.io/s/o04l7)
+- [Live-Demo post.ch](https://www.post.ch)
+- [Live-Demo css.ch](https://www.css.ch)
 
-### Types
+### Dateiformate
 
-We made life a little easier and leave the choice of file format to the backend, or rather to the CDN that [css.ch](https://www.css.ch) uses. When the browser requests a .jpg, for example, the CDN reads the `accept` header to see whether `webp`, `avif` or other formats are allowed. If they are, it returns that format in its response.
+Wir haben es uns etwas leichter gemacht und überlassen die Wahl des Dateiformats dem Backend, genauer dem CDN, das [css.ch](https://www.css.ch) verwendet. Fordert der Browser z.B. ein .jpg an, liest das CDN den `accept`-Header aus und erkennt, ob `webp`, `avif` oder andere Formate erlaubt sind. Falls ja, liefert es dieses Format in seiner Response.
 
-This way we don't have to deal with the different file types in the frontend, and we don't need a `<source>` for each of them.
+So müssen wir uns im Frontend nicht um die verschiedenen Dateitypen kümmern und brauchen für sie keine eigene `<source>`.
 
-![Accept Headers](./assets/accept-headers.png)
+![Accept-Header](./assets/accept-headers.png)
