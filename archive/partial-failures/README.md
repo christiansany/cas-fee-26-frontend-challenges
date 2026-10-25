@@ -51,6 +51,8 @@ flowchart TB
   class reviewsB,reviews,recsB,recs optional
 ```
 
+![Error boundaries on the item page](./assets/error-boundaries.png)
+
 Availability has failed, and only its frame shows a fallback. Without the inner frames, the whole page would say "Something went wrong".
 
 ## What a partial response looks like
@@ -111,6 +113,8 @@ flowchart LR
   class avail,i important
   class reviews,recs,o optional
 ```
+
+![What happens when each part fails](./assets/failure-levels.png)
 
 This is a product decision. Ask the product owner: "If availability is down, can a user still do something useful here?"
 
@@ -388,4 +392,4 @@ Docs: [IETF draft: The Idempotency-Key HTTP Header Field](https://datatracker.ie
 - [MDN: HTTP response status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status)
 - Marc Brooker: [Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) (AWS Architecture Blog)
 - [TanStack Query: Important defaults](https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults)
-- Related topic: [GraphQL vs REST, and why large sites use both](../graphql-vs-rest/README.md)
+- Related topic: [GraphQL vs REST, and why large sites use both](../../topics/graphql-vs-rest/README.md)

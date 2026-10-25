@@ -50,6 +50,8 @@ sequenceDiagram
   Note over U,L: The user sends R to support. Support searches for R and finds every line.
 ```
 
+![Following one request ID from click to support](./assets/request-id-flow.png)
+
 The ID travels in the `x-request-id` HTTP header. The sections below build the chain piece by piece.
 
 ## Structured log lines
@@ -85,6 +87,8 @@ flowchart LR
   server -->|"JSON lines on stdout"| shipper["Log shipper"]
   shipper --> platform["Log platform"]
 ```
+
+![From the browser logger to the log platform](./assets/log-pipeline.png)
 
 We build the browser path later in this topic.
 
