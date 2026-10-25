@@ -263,8 +263,7 @@ Die Übung enthält bereits das Grid-System von Bootstrap.
 
 - [ ] Füge ein Responsive Image ein und nimm dafür die Bilddateien unter `./images/`
   - [ ] Das Bild sollte auf xs 12 Spalten breit sein, auf rg 6 Spalten und ab lg 4 Spalten
-  - [ ] Berechne die sizes so, dass die Grösse auf jedem Breakpoint stimmt.  
-        Schau dir dazu auch das CSS an: Wie viel Padding haben der Container, die Row und die Col? Berücksichtige diese Werte bei der Berechnung.
+  - [ ] Berechne die sizes so, dass die Grösse auf jedem Breakpoint stimmt. Schau dir dazu auch das CSS an: Wie viel Padding haben der Container, die Row und die Col? Berücksichtige diese Werte bei der Berechnung.
 
 Zeit: etwa 15 min
 
