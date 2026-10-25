@@ -13,7 +13,7 @@
 - [URL-State mit nuqs](#url-state-mit-nuqs)
 - [Die alte Liste beim Laden sichtbar halten](#die-alte-liste-beim-laden-sichtbar-halten)
 - [Offset- oder Cursor-Pagination](#offset--oder-cursor-pagination)
-- ["Load more", das den Zurück-Button übersteht](#load-more-das-den-zurück-button-übersteht)
+- ["Mehr laden", das den Zurück-Button übersteht](#mehr-laden-das-den-zurück-button-übersteht)
 - [Das Wichtigste](#das-wichtigste)
 - [Weiterführende Links](#weiterführende-links)
 
@@ -70,7 +70,7 @@ flowchart LR
   Page -- "rendern" --> List["Liste"]
 ```
 
-![Die URL als einzige Quelle der Filter](./assets/url-single-source.png)
+![Die URL als Single Source of Truth für den Listenzustand](./assets/url-single-source.png)
 
 Die Daten fliessen in eine Richtung. Controls schreiben die URL und lesen ihren aktuellen Wert aus ihr. Daten lädt allein die Listenseite.
 
@@ -89,7 +89,7 @@ URLs kommen von ausserhalb deiner App: Leute bearbeiten sie von Hand, und Bots s
 
 ## Push oder Replace
 
-Ein Control ändert die URL über die History API. `history.pushState` und `history.replaceState` ändern beide die URL, ohne eine Seite zu laden; deine App bleibt stehen und rendert neu. Sie unterscheiden sich darin, was sie mit der Browser-History machen, dem Stapel von Einträgen, durch den Zurück geht:
+Ein Control ändert die URL über die History API. `history.pushState` und `history.replaceState` ändern beide die URL, ohne eine Seite zu laden. Das Neurendern übernimmt dein Router oder eine Library wie nuqs. Die beiden unterscheiden sich darin, was sie mit der Browser-History machen, dem Stapel von Verlaufseinträgen, durch den Zurück geht:
 
 ```mermaid
 flowchart TB
@@ -108,14 +108,14 @@ flowchart TB
   Start ~~~ Push ~~~ Replace
 ```
 
-![History-Einträge mit pushState und replaceState](./assets/history-push-replace.png)
+![Verlaufseinträge mit pushState und replaceState](./assets/history-push-replace.png)
 
 Wähle die Methode danach, was "Zurück" bedeuten soll:
 
 | Methode                | Browser-History               | Verwenden für                                                          |
 | ---------------------- | ----------------------------- | ---------------------------------------------------------------------- |
-| `history.pushState`    | legt einen Eintrag obendrauf  | eine Kategorie, die Sortierung, eine Seitenzahl: Zurück macht die Wahl rückgängig |
-| `history.replaceState` | ersetzt den obersten Eintrag  | Tippen, einen Slider, "Load more": Zurück verlässt die Liste           |
+| `history.pushState`    | legt einen Verlaufseintrag obendrauf  | eine Kategorie, die Sortierung, eine Seitenzahl: Zurück macht die Wahl rückgängig |
+| `history.replaceState` | ersetzt den obersten Verlaufseintrag  | Tippen, einen Slider, "Mehr laden": Zurück verlässt die Liste           |
 
 Doku: [pushState](https://developer.mozilla.org/en-US/docs/Web/API/History/pushState), [replaceState](https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState)
 
@@ -172,9 +172,9 @@ Doku: [nuqs adapters](https://nuqs.dev/docs/adapters), [basic usage](https://nuq
 
 ## Die alte Liste beim Laden sichtbar halten
 
-Jemand wählt eine Kategorie, und die Liste verschwindet hinter einem Spinner. Bei langsamer Verbindung springt die Seite, und die Person verliert ihre Position. Lass die alte Liste abgedunkelt stehen, bis die neue bereit ist.
+Jemand wählt eine Kategorie, und die Liste verschwindet hinter einem Spinner. Bei langsamer Verbindung springt die Seite, und die Person verliert ihre Position. Lass die alte Liste ausgegraut stehen, bis die neue bereit ist.
 
-Das macht Reacts `useDeferredValue`. Es braucht eine Liste, die **suspendiert**: Die Komponente ist noch nicht bereit, weil ihre Daten noch laden, also wartet React auf sie. Data-Libraries wie TanStack Query (`useSuspenseQuery`) suspendieren für dich.
+Das macht Reacts `useDeferredValue`. Es braucht eine Liste, die **suspendiert** (englisch "suspends", von React Suspense): Die Komponente ist noch nicht bereit, weil ihre Daten noch laden, also wartet React auf sie. Data-Libraries wie TanStack Query (`useSuspenseQuery`) suspendieren für dich.
 
 Die Listenseite hält zwei Werte: `search`, was die URL jetzt sagt, und `shownSearch`, die verzögerte Kopie, die die Liste rendert. React rendert den neuen Wert im Hintergrund und wechselt erst, wenn nichts mehr suspendiert:
 
@@ -186,17 +186,17 @@ sequenceDiagram
   participant A as API
   U->>R: wählt "tools"
   R->>S: search = "?category=tools", shownSearch = alter Wert
-  Note over S: alte Liste bleibt, abgedunkelt
+  Note over S: alte Liste bleibt, ausgegraut
   R->>R: Render im Hintergrund mit shownSearch = "?category=tools"
   R->>A: die Liste suspendiert und lädt tools
   Note over R: dieser Render wird nicht angezeigt, React wartet
   A-->>R: Einträge kommen an
   R->>R: erneuter Render: nichts suspendiert
   R->>S: Wechsel: shownSearch = "?category=tools"
-  Note over S: neue Liste, nicht abgedunkelt
+  Note over S: neue Liste, nicht ausgegraut
 ```
 
-Vergleiche Strings, keine Objekte: React prüft, ob sich der Wert geändert hat, und ein neues Params-Objekt ist bei jedem Render ein anderes, auch wenn die URL gleich blieb. `createSerializer` von nuqs macht aus den geparsten Params einen einzigen Query-String. Es geht von den geparsten Werten aus, darum ergeben `?page=banana` und gar keine Seitenangabe denselben String.
+Vergleiche Strings, keine Objekte: React prüft, ob sich der Wert geändert hat, und ein neues Params-Objekt ist bei jedem Render ein anderes, auch wenn die URL gleich blieb. `createSerializer` von nuqs macht aus den geparsten Params einen einzigen Query-String. Es geht von den geparsten Werten aus und lässt Werte weg, die dem Default entsprechen (`clearOnDefault`, seit nuqs 2 Standard). Darum ergeben `?page=banana` und gar keine Seitenangabe denselben String.
 
 ```tsx
 const serialize = createSerializer(listParsers);
@@ -256,9 +256,9 @@ page 2:  after=C → D E F    a new item N at the top shifts nothing
 
 Für kleine Listen reicht Offset. Wechsle zu Cursors, wenn die Liste gross ist und sich ändert, während Leute sie lesen.
 
-## "Load more", das den Zurück-Button übersteht
+## "Mehr laden", das den Zurück-Button übersteht
 
-Jemand klickt dreimal auf "Load more", sieht 96 Einträge, öffnet Eintrag 63 und drückt Zurück. Steht in der URL nur `/items`, enthält die Seite jetzt 24 Einträge, und die Scroll-Position existiert nicht mehr.
+Jemand klickt dreimal auf den Button "Mehr laden" (im Code "Load more"), sieht 96 Einträge, öffnet Eintrag 63 und drückt Zurück. Steht in der URL nur `/items`, enthält die Seite jetzt 24 Einträge, und die Scroll-Position existiert nicht mehr.
 
 Speichere, wie viele Einträge angezeigt werden: `?count=96`. Beim Zurückkehren fragt die Seite die ersten 96 Einträge in einem Request an und braucht dafür keinen Cursor.
 
@@ -267,7 +267,7 @@ sequenceDiagram
   participant U as User
   participant P as Listenseite
   participant A as API
-  U->>P: klickt dreimal auf "Load more"
+  U->>P: klickt dreimal auf "Mehr laden"
   P->>P: replaceState zu ?count=96
   U->>P: öffnet Eintrag 63, drückt dann Zurück
   P->>A: erste 96 Einträge
@@ -306,9 +306,9 @@ Jeder Klick lädt die ganze sichtbare Liste neu: 48 Einträge, dann 72. Das ist 
 Doku: [scrollRestoration auf MDN](https://developer.mozilla.org/en-US/docs/Web/API/History/scrollRestoration)
 
 <details>
-<summary>Weiterführend: nummerierte Seiten, "Load more" oder Infinite Scroll</summary>
+<summary>Weiterführend: nummerierte Seiten, "Mehr laden" oder Infinite Scroll</summary>
 
-|                    | Nummerierte Seiten                 | "Load more"-Button                      | Infinite Scroll                               |
+|                    | Nummerierte Seiten                 | "Mehr laden"-Button                     | Infinite Scroll                               |
 | ------------------ | ---------------------------------- | --------------------------------------- | --------------------------------------------- |
 | Kontrolle für User | hoch: springen und vergleichen     | hoch: User entscheiden selbst            | tief: es kommt immer mehr Inhalt              |
 | Zurück-Button      | funktioniert: die Seite steht in der URL | braucht die Anzahl in der URL     | schwierig: braucht Anzahl und Scroll-Position |
@@ -329,9 +329,9 @@ Doku: [Relay pagination](https://relay.dev/docs/guided-tour/list-data/pagination
 
 - Die URL ist die Single Source of Truth für eine Liste. Alles, was ändert, **welche Daten** du zeigst, gehört dorthin, mit einem Default für jeden Key.
 - Die Daten fliessen in eine Richtung: Controls schreiben die URL, eine Stelle liest sie und lädt die Daten, die Liste rendert das Ergebnis.
-- Nimm `push` für Entscheidungen, die man rückgängig machen will, `replace` für Tippen und "Load more".
+- Nimm `push` für Entscheidungen, die man rückgängig machen will, `replace` für Tippen und "Mehr laden".
 - `useDeferredValue` mit einer suspendierenden Datenquelle hält die alte Liste sichtbar, während die neue lädt.
-- Nimm Cursors für grosse, sich ändernde Listen. Speichere bei "Load more" die Anzahl in der URL, damit Zurück die Liste wiederherstellt.
+- Nimm Cursors für grosse, sich ändernde Listen. Speichere bei "Mehr laden" die Anzahl in der URL, damit Zurück die Liste wiederherstellt.
 
 ## Weiterführende Links
 

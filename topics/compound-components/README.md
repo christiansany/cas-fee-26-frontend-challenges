@@ -13,9 +13,9 @@
 
 ## Was sind Compound Components?
 
-Compound Components sind ein Pattern, das den **State** und das **Verhalten** einer Gruppe von Komponenten kapselt, die Kontrolle über das Rendering der einzelnen Teile aber dem Developer überlässt.
+Compound Components sind ein Pattern, das den **State** und das **Verhalten** einer Gruppe von Komponenten kapselt, die Kontrolle über das Rendering der einzelnen Teile aber dir überlässt.
 
-Das Ziel ist eine ausdrucksstärkere und flexiblere API für die Kommunikation zwischen der übergeordneten Komponente und ihren Child-Komponenten.
+Das Ziel ist eine ausdrucksstärkere und flexiblere API für die Kommunikation zwischen der übergeordneten Komponente und ihren Kindkomponenten.
 
 Ein gutes Beispiel ist `<select>` in Kombination mit `<option>` in HTML:
 
@@ -38,7 +38,7 @@ Die beiden Elemente kommunizieren im Hintergrund miteinander. Das `<select>` hä
 
 Angenommen, wir müssen ein Menu bauen. Das Menu hat einen Button, der es öffnet und schliesst. Es enthält Links und Buttons. Ein Klick darauf soll die gewünschte Aktion auslösen und das Menu wieder schliessen.
 
-Schauen wir verschiedene Implementationsarten an.
+Schauen wir uns verschiedene Arten der Implementierung an.
 
 ### Konfiguration
 
@@ -68,7 +68,7 @@ function Example() {
 
 In diesem Beispiel erstellen wir ein kompliziertes Konfigurationsobjekt. Es enthält bereits alle Informationen, die jede Komponente innerhalb von `<Menu>` für Rendering und Verhalten braucht. Dieses Pattern ist weit verbreitet.
 
-Ob das Menu offen oder geschlossen ist, verwaltet die `<Menu>`-Komponente selbst, und die Child-Komponenten können den State von `<Menu>` verändern.
+Ob das Menu offen oder geschlossen ist, verwaltet die `<Menu>`-Komponente selbst, und die Kindkomponenten können den State von `<Menu>` verändern.
 
 #### Vorteile
 
@@ -76,8 +76,8 @@ Ob das Menu offen oder geschlossen ist, verwaltet die `<Menu>`-Komponente selbst
 
 #### Nachteile
 
-1. `<Menu>` ist direkt für das Rendering aller Child-Komponenten verantwortlich, was die Komponenten sehr eng miteinander koppelt
-2. Die `props` werden durch mehrere Komponenten durchgereicht. Das nennt man "prop drilling", und es gilt allgemein als Code Smell
+1. `<Menu>` ist direkt für das Rendering aller Kindkomponenten verantwortlich, was die Komponenten sehr eng miteinander koppelt
+2. Die `props` werden durch mehrere Komponenten durchgereicht. Das nennt man "Prop Drilling" (Props werden Ebene für Ebene weitergereicht), und das wird schnell umständlich und unübersichtlich
 3. Wenn die Daten in einem anderen Format daherkommen, musst du sie zuerst auf die Struktur der Config mappen
 
 ```jsx
@@ -153,7 +153,7 @@ In diesem Beispiel müssen wir kein kompliziertes Konfigurationsobjekt erstellen
 
 #### Vorteile
 
-1. Die Komponenten sind nicht mehr eng gekoppelt, und `<Menu>` muss sich nicht mehr um das Rendering seiner Child-Komponenten kümmern
+1. Die Komponenten sind nicht mehr eng gekoppelt, und `<Menu>` muss sich nicht mehr um das Rendering seiner Kindkomponenten kümmern
 2. Die Datenstruktur spielt keine Rolle mehr
 
 #### Nachteile
@@ -163,7 +163,7 @@ In diesem Beispiel müssen wir kein kompliziertes Konfigurationsobjekt erstellen
 ## Die Lösung
 
 Das Compound Components Pattern verbindet beide Ansätze.  
-Der State, den wir nicht selbst verwalten wollen, liegt in der `<Menu>`-Komponente. Die Komponenten kommunizieren über [React Context](https://react.dev/reference/react/useContext), dadurch sind die Implementationsdetails komplett gekapselt. Wir können uns ganz auf unsere eigene Implementation konzentrieren.
+Der State, den wir nicht selbst verwalten wollen, liegt in der `<Menu>`-Komponente. Die Komponenten kommunizieren über [React Context](https://react.dev/learn/passing-data-deeply-with-context), dadurch sind die Implementierungsdetails komplett gekapselt. Wir können uns ganz auf unsere eigene Implementierung konzentrieren.
 
 ```jsx
 function Example() {
@@ -187,7 +187,7 @@ Das liest sich deutlich besser.
 
 #### Vorteile
 
-1. Du musst den State nicht selbst verwalten, kannst je nach Implementation aber trotzdem darauf zugreifen (über Render Props)
+1. Du musst den State nicht selbst verwalten, kannst je nach Implementierung aber trotzdem darauf zugreifen (über Render Props)
 2. Die Datenstruktur spielt keine Rolle mehr
 3. Die Komponenten sind nicht eng miteinander gekoppelt
 

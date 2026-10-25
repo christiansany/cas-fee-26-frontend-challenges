@@ -1,6 +1,6 @@
 # Responsive Images: Die Umsetzung auf post.ch und css.ch
 
-> Ein 400 px breites Bild braucht auf einem Smartphone mit 3x-Display 1200 echte Pixel, und ein falsches `srcset` schickt eine Datei in Desktop-Grösse über die Mobilverbindung. Wir schauen uns Density und Width Descriptors an, das `sizes`-Attribut und `<picture>` für Art Direction und moderne Formate wie AVIF. Danach schauen wir, wie post.ch und css.ch die `sizes` für Bilder in einem 12-Spalten-Grid berechnen. Die Berechnung übst du selbst in einer Sandbox.
+> Ein 400 px breites Bild braucht auf einem Smartphone mit 3x-Display 1200 Gerätepixel, und ein falsches `srcset` schickt eine Datei in Desktop-Grösse über die Mobilverbindung. Wir schauen uns Density und Width Descriptors an, das `sizes`-Attribut und `<picture>` für Art Direction und moderne Formate wie AVIF. Danach schauen wir, wie post.ch und css.ch die `sizes` für Bilder in einem 12-Spalten-Grid berechnen. Die Berechnung übst du selbst in einer Sandbox.
 
 **Dauer:** etwa 90 Minuten
 
@@ -18,17 +18,17 @@ Wir schauen uns die Umsetzung von Responsive Images an, die auf [post.ch](https:
 
 ### Recap: Hochauflösende Displays
 
-Man könnte annehmen, dass kleinere Devices immer kleinere Bilder bekommen sollten. Das ist nicht immer der Fall.
+Man könnte annehmen, dass kleinere Geräte immer kleinere Bilder bekommen sollten. Das ist nicht immer der Fall.
 
 > "A pixel is not a pixel"
 
-Es gibt einen Unterschied zwischen **CSS-Pixeln** und **Screen-Pixeln**. CSS-Pixel sind die Einheit für Abmessungen auf unserer Website. Screen-Pixel sind die physischen Pixel, die das Device nutzt.
+Es gibt einen Unterschied zwischen **CSS-Pixeln** und **Gerätepixeln** (physischen Pixeln). CSS-Pixel sind die Einheit für Abmessungen auf unserer Website. Gerätepixel sind die physischen Pixel, die das Gerät nutzt.
 
 ![Pixeldichte](./assets/pixel-density.jpg)
 
 **Beispiele für Device Pixel Ratio (DPR)**
 
-| Device | Native Pixel | CSS-Pixel | Device Pixel Ratio (DPR) |
+| Device | Gerätepixel | CSS-Pixel | Device Pixel Ratio (DPR) |
 |---|--:|--:|:-:|
 | iPhone 6, 6s, 7, 8, SE (2020) | 750 x 1334 | 375 x 667 | 2 |
 | iPhone 11 Pro, X, XS | 1125 x 2436 | 375 x 812 | 3 |
@@ -36,7 +36,7 @@ Es gibt einen Unterschied zwischen **CSS-Pixeln** und **Screen-Pixeln**. CSS-Pix
 
 **Scharfe Bilder liefern**
 
-Wie gross müssen unsere Bilder also sein, damit sie auf diesen Devices nicht verschwommen aussehen?
+Wie gross müssen unsere Bilder also sein, damit sie auf diesen Geräten nicht verschwommen aussehen?
 
 | CSS-Pixel | DPR 1.0 | DPR 2.0 (4x px) | DPR 3.0 (9x px) | DPR 4.0 (16x px) |
 |--:|--:|--:|--:|--:|
@@ -44,11 +44,11 @@ Wie gross müssen unsere Bilder also sein, damit sie auf diesen Devices nicht ve
 | 150px | 150px | 300px | 450px | 600px |
 | 400px | 400px | 800px | 1200px | 1600px |
 
-Die Tabelle zeigt: Bei einem Pixel Ratio von **3x** oder **4x** **wächst die Bildgrösse schnell**, wenn das Bild scharf aussehen soll. Das ist ungünstig, weil in mobilen Geräten meist schwächere Hardware steckt als in Desktop-Geräten. Dazu kommt eine eventuell langsamere Mobilverbindung, was das Problem verstärkt.
+Die Tabelle zeigt: Bei einer DPR von **3x** oder **4x** **wächst die Bildgrösse schnell**, wenn das Bild scharf aussehen soll. Das ist ungünstig, weil in mobilen Geräten meist schwächere Hardware steckt als in Desktop-Geräten. Dazu kommt eine eventuell langsamere Mobilverbindung, was das Problem verstärkt.
 
 **Ungewöhnliche DPRs**
 
-Bisher hatte jedes Device eine ganzzahlige DPR (2.0, 3.0 usw.). Gibt es auch eine DPR von z.B. 1.5? Ja, die gibt es.
+Bisher hatte jedes Gerät eine ganzzahlige DPR (2.0, 3.0 usw.). Gibt es auch eine DPR von z.B. 1.5? Ja, die gibt es.
 
 ![DPR eines MacBook 16"](./assets/macbook-16-dpr.png)
 
@@ -59,10 +59,10 @@ Um auf diesem Laptop ein Bild in 40px darzustellen, wäre das "perfekte" Bild al
 
 Bei Responsive Images musst du auf folgende Schwierigkeiten achten:
 
-- Kleinere Devices sollten generell kleinere Bilder erhalten
-- Die Device Pixel Ratio sollte so genutzt werden, dass Bilder möglichst scharf sind, ohne dass die Payload des Bildes explodiert
-- Je nach Modul oder Use Case kann sich das Seitenverhältnis des Bildes von Device zu Device ändern
-- Browser unterstützen unterschiedliche Dateiformate. Wie können wir damit umgehen und das nutzen?
+- Kleinere Geräte sollten generell kleinere Bilder erhalten
+- Die DPR sollte so genutzt werden, dass Bilder möglichst scharf sind, ohne dass die Dateigrösse des Bildes explodiert
+- Je nach Modul oder Use Case kann sich das Seitenverhältnis des Bildes von Gerät zu Gerät ändern
+- Browser unterstützen unterschiedliche Bildformate. Wie können wir damit umgehen und das nutzen?
 
 ### Die Display Density Descriptor Methode
 
@@ -83,11 +83,11 @@ Im Beispiel unten würde ein iPhone 6 (DPR 2) das Bild `cat-400px.jpg` laden, ei
 
 **Vorteile**
 
-Mit diesem Descriptor können wir dem Browser ein Bild aufzwingen. Bilder werden scharf angezeigt, egal auf welchem Device wir uns befinden.
+Mit diesem Descriptor legen wir fest, welches Bild für welche DPR gedacht ist. Auf Geräten mit ganzzahliger DPR (1x, 2x, 3x) sind Bilder so scharf, wie wir sie vorbereitet haben.
 
 **Nachteile**
 
-Ein Device mit einer DPR von z.B. 1.5 lädt immer das nächstgrössere Bild herunter. Auf unserem MacBook 16" mit einer DPR von 1.5 muss der Browser also ein zu grosses Bild laden, damit es scharf angezeigt wird.
+Ein Gerät mit einer DPR von z.B. 1.5 bekommt in der Regel das nächstgrössere Bild (hier 2x). Auf unserem MacBook 16" mit einer DPR von 1.5 lädt der Browser also meist ein zu grosses Bild, damit es scharf angezeigt wird.
 
 **Demo** 🤯
 
@@ -113,20 +113,22 @@ Diese Methode ist vor allem dann sinnvoll, wenn sich die Breite eines Bildes mit
              cat-800px.jpg 800w">
 ```
 
-Diese Information allein nützt dem Browser wenig, da er noch nicht weiss, wie breit das Bild angezeigt wird. Weil sich die Anzeigebreite mit der Breite des Viewports ändert, können wir auch kein `width`-Attribut verwenden.
+Diese Information allein nützt dem Browser wenig, da er noch nicht weiss, wie breit das Bild angezeigt wird. Weil sich die Anzeigebreite mit der Breite des Viewports ändert, taugt auch ein festes `width`-Attribut nicht als Angabe der Anzeigebreite. `width` und `height` setzen wir trotzdem (siehe "Laden und Priorität"): Sie liefern dem Browser das Seitenverhältnis.
 
 #### Das `sizes`-Attribut
 
-Das `sizes`-Attribut teilt dem Browser mit, wie breit ein Bild effektiv dargestellt wird. Es nimmt entweder einen Wert oder mehrere, getrennt durch ein **,** (Komma). Im Attribut kannst du Media Queries verwenden. Bei mehreren Werten wertet der Browser sie von *links nach rechts* aus. Sobald eine Media Query zutrifft, nutzt er diese Grösse als Anzeigebreite des Bildes.
+Das `sizes`-Attribut teilt dem Browser mit, wie breit ein Bild effektiv dargestellt wird. Es nimmt entweder einen Wert oder mehrere, getrennt durch ein **,** (Komma). Im Attribut kannst du Media Queries verwenden. Bei mehreren Werten wertet der Browser sie von *links nach rechts* aus. Sobald eine Media Query zutrifft, nutzt er diese Grösse als Anzeigebreite des Bildes. Der letzte Wert hat keine Media Query und gilt als Fallback. Ohne `sizes`-Attribut geht der Browser von `100vw` aus.
 
 ![Das sizes-Attribut](./assets/sizes-attr.png)
 
 **Bedingung für die Bildgrösse**
 
-Es gibt drei Arten, die Breite anzugeben:
+Als Breite sind alle CSS-Längen erlaubt, typischerweise:
 - In `vw`
-- In `px`
-- Als Kombination von beiden, verpackt in einem `calc()`
+- In `px` (oder `em`, `rem` usw.; relative Einheiten beziehen sich auf das Root-Element)
+- Als Kombination davon in einem `calc()`
+
+Prozentwerte sind nicht erlaubt.
 
 **Beispiel**
 
@@ -149,7 +151,7 @@ Das nächste Beispiel zeigt ein Bild, dessen Breite immer relativ zum Viewport i
              100vw">
 ```
 
-Mit den Informationen über die **verfügbaren Bilder** und die **Breite**, in der das Bild angezeigt wird, kann der Browser nun entscheiden, welches Bild er herunterlädt, damit es möglichst scharf aussieht. Dafür nutzt er auch die **DPR** des Device und z.B. die Verbindungsgeschwindigkeit.
+Mit den Informationen über die **verfügbaren Bilder** und die **Breite**, in der das Bild angezeigt wird, kann der Browser nun entscheiden, welches Bild er herunterlädt, damit es möglichst scharf aussieht. Dafür nutzt er auch die **DPR** des Geräts und z.B. die Verbindungsgeschwindigkeit.
 
 **Avatar-Beispiel**
 
@@ -179,11 +181,11 @@ Mit den Informationen über die **verfügbaren Bilder** und die **Breite**, in d
 
 ### Das `<picture>`-Element
 
-Das `<picture>`-Element gibt uns noch mehr Möglichkeiten für Art Direction. So kannst du z.B. ein Bild auf Mobile im Seitenverhältnis 1:1 und auf dem Desktop in 16:9 zeigen. Ausserdem können wir damit mehrere Dateiformate anbieten: Browser wählen das beste Format, das sie unterstützen, und alle anderen bekommen einen Fallback.
+Das `<picture>`-Element gibt uns noch mehr Möglichkeiten für Art Direction. So kannst du z.B. ein Bild auf Mobile im Seitenverhältnis 1:1 und auf dem Desktop in 16:9 zeigen. Ausserdem können wir damit mehrere Bildformate anbieten: Der Browser nimmt die erste `<source>`, deren `type` er unterstützt, und alle anderen bekommen den Fallback im `<img>`. Die Reihenfolge ist also wichtig.
 
 ### Art Direction mit dem `<picture>`-Element
 
-Mit dem `<source>`-Element kannst du innerhalb des `<picture>`-Elements mehrere verschiedene Bilder angeben, jeweils für unterschiedliche Devices. Du kannst beliebig viele `<source>`-Elemente verwenden.
+Mit dem `<source>`-Element kannst du innerhalb des `<picture>`-Elements mehrere verschiedene Bilder angeben, jeweils für unterschiedliche Geräte. Du kannst beliebig viele `<source>`-Elemente verwenden.
 
 ![Sources im picture-Element](./assets/sources.png)
 
@@ -201,12 +203,12 @@ Bei mehreren `<source>`-Elementen wertet der Browser sie von *der ersten bis zur
 </picture>
 ```
 
-### Verschiedene Dateiformate unterstützen
+### Verschiedene Bildformate unterstützen
 
-Mit einer `<source>` können wir dasselbe Bild auch in verschiedenen Dateiformaten anbieten.  
+Mit einer `<source>` können wir dasselbe Bild auch in verschiedenen Bildformaten anbieten.  
 Unterstützt ein Browser den angegebenen `type` nicht, ignoriert er die ganze Source.
 
-AVIF ergibt meist die kleinsten Dateien, gefolgt von WebP. Beide funktionieren in allen aktuellen Browsern: AVIF ist seit Januar 2024 Baseline, WebP seit 2020. Das JPEG im `<img>` bleibt der Fallback für alles andere.
+AVIF ergibt meist die kleinsten Dateien, gefolgt von WebP. Beide funktionieren in allen aktuellen Browsern: AVIF ist seit Januar 2024 Baseline (seit Juli 2026 "Widely available"), WebP seit September 2020. Das JPEG im `<img>` bleibt der Fallback für alles andere.
 
 **Beispiel**
 
@@ -233,7 +235,7 @@ Die richtige Datei ist erst die halbe Arbeit. Der Browser muss auch wissen, wann
 - **Platz reservieren.** Setze `width` und `height` auf die intrinsische Grösse des Bildes. Der Browser leitet daraus das Seitenverhältnis ab und reserviert den Platz, bevor die Datei ankommt, damit die Seite nicht verspringt.
 - **Was unterhalb des Folds liegt, lazy laden.** `loading="lazy"` verzögert den Download, bis das Bild in die Nähe des Viewports kommt. Alle aktuellen Browser unterstützen das.
 - **Das grösste Bild beim ersten Laden nie lazy laden.** Dieses Bild ist oft dein Largest Contentful Paint (LCP). Lass es eager und ergänze `fetchpriority="high"`, damit der Browser es vor anderen Bildern holt.
-- **Lazy Images vom Browser messen lassen.** Bei Lazy Images kannst du `sizes` mit `auto` beginnen: Der Browser nimmt dann die tatsächliche Layout-Breite des Bildes. Chrome, Edge und Firefox unterstützen das, Safari 27 hat es mit einem bekannten Bug eingeführt. Lass deshalb deine berechneten `sizes` als Fallback nach `auto` stehen.
+- **Lazy Images vom Browser messen lassen.** Bei Lazy Images kannst du `sizes` mit `auto` beginnen: Der Browser nimmt dann die tatsächliche Layout-Breite des Bildes. Chrome, Edge und Firefox unterstützen das, Safari noch nicht zuverlässig. Lass deshalb deine berechneten `sizes` als Fallback nach `auto` stehen.
 
 ```html
 <img src="cat-400px.jpg" alt="" width="800" height="600" loading="lazy"
@@ -241,7 +243,7 @@ Die richtige Datei ist erst die halbe Arbeit. Der Browser muss auch wissen, wann
      sizes="auto, (min-width: 800px) 50vw, 100vw">
 ```
 
-Doku: [MDN: `<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority)
+Doku: [MDN: `<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority), [web.dev: Optimize Largest Contentful Paint](https://web.dev/articles/optimize-lcp)
 
 ### Übung 🔥
 
@@ -440,10 +442,10 @@ const sizes = mapImageSizesToColumns([
 - [Live-Demo post.ch](https://www.post.ch)
 - [Live-Demo css.ch](https://www.css.ch)
 
-### Dateiformate
+### Bildformate
 
-Wir haben es uns etwas leichter gemacht und überlassen die Wahl des Dateiformats dem Backend, genauer dem CDN, das [css.ch](https://www.css.ch) verwendet. Fordert der Browser z.B. ein .jpg an, liest das CDN den `accept`-Header aus und erkennt, ob `webp`, `avif` oder andere Formate erlaubt sind. Falls ja, liefert es dieses Format in seiner Response.
+Wir haben es uns etwas leichter gemacht und überlassen die Wahl des Bildformats dem Backend, genauer dem CDN, das [css.ch](https://www.css.ch) verwendet. Fordert der Browser z.B. ein .jpg an, liest das CDN den `accept`-Header aus und erkennt, ob `webp`, `avif` oder andere Formate erlaubt sind. Falls ja, liefert es dieses Format in seiner Response.
 
-So müssen wir uns im Frontend nicht um die verschiedenen Dateitypen kümmern und brauchen für sie keine eigene `<source>`.
+So müssen wir uns im Frontend nicht um die verschiedenen Bildformate kümmern und brauchen für sie keine eigene `<source>`.
 
 ![Accept-Header](./assets/accept-headers.png)

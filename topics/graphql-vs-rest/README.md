@@ -31,7 +31,7 @@ Accept: application/json
 }
 ```
 
-Die Response ist JSON mit einem Statuscode, hier `200`. Verwandte Ressourcen erscheinen oft als Links (`href`), denen ein Client mit dem nächsten Request folgen kann. `GET` liest, `POST` erstellt, `PUT` und `PATCH` ändern, `DELETE` löscht.
+Die Response ist JSON mit einem HTTP-Statuscode, hier `200`. Verwandte Ressourcen erscheinen oft als Links (`href`), denen ein Client mit dem nächsten Request folgen kann. `GET` liest, `POST` erstellt, `PUT` und `PATCH` ändern, `DELETE` löscht.
 
 Gehören API und Frontend demselben Team, ist ein neues Feld auf einer Seite eine Änderung an einem Route Handler. **Das funktioniert nicht mehr, sobald die Seite Daten aus Services braucht, die anderen Teams gehören.**
 
@@ -218,7 +218,7 @@ type ProductType {
 
 type ProductList {
   totalCount: Int!
-  items: [Product!]!
+  items: [Product!]
 }
 
 type Product {
@@ -298,7 +298,7 @@ Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **F�
 
 ### Wenn ein Service ausfällt
 
-**Fällt ein Service aus, kommt der Rest trotzdem an.** Angenommen, Team C ist down: `items` ist `null`, und ein Eintrag in `errors` sagt, wo.
+**Fällt ein Service aus, kommt der Rest trotzdem an.** Das gilt für Felder, die `null` sein dürfen: Ein Fehler in einem Feld mit `!` setzt das nächste nullable Feld darüber auf `null`. Deshalb ist `items` im Schema ohne `!` deklariert. Angenommen, Team C ist down: `items` ist `null`, und ein Eintrag in `errors` sagt, wo.
 
 ```json
 {
@@ -307,7 +307,7 @@ Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **F�
 }
 ```
 
-Der HTTP-Status ist trotzdem ein 2xx, meist `200`, also **prüf `errors` selbst**.
+Der HTTP-Statuscode ist hier trotzdem `200`, also **prüf `errors` selbst**.
 
 Doku: [Variablen](https://graphql.org/learn/queries/#variables), [Response](https://graphql.org/learn/response/)
 
@@ -317,9 +317,9 @@ Der Browser hat einen Request geschickt. Der GraphQL-Server muss die Daten trotz
 
 **Nicht jedes Feld braucht einen.** Gibt ein Resolver ein Objekt zurück, werden die Felder dieses Objekts direkt daraus gelesen. Ein eigener Resolver ist nur nötig, wenn die Daten eines Felds von woanders kommen oder Arbeit brauchen:
 
-![Die Query der Seite: Vier Felder haben einen eigenen Resolver, der Rest kommt mit dem Elternobjekt](./assets/resolvers.png)
+![Die Query der Seite: Vier Felder haben einen eigenen Resolver, der Rest kommt mit dem `parent`-Objekt](./assets/resolvers.png)
 
-Im Code sehen die Resolver für unsere Seite so aus. Jeder Resolver bekommt das Objekt, das sein Eltern-Resolver zurückgegeben hat (`parent`), die Argumente des Felds (`args`) und einen `context` mit den API-Clients für diesen Request:
+Im Code sehen die Resolver für unsere Seite so aus. Jeder Resolver bekommt das Ergebnis des übergeordneten Resolvers (`parent`), die Argumente des Felds (`args`) und einen `context` mit den API-Clients für diesen Request:
 
 ```ts
 const resolvers = {
@@ -342,20 +342,20 @@ const resolvers = {
 };
 ```
 
-`name`, `breadcrumb`, `navigation`, `totalCount`, `price`, `brand` und `rating` haben keinen Resolver. GraphQL liest `productType.name` oder `product.price` aus dem Objekt, das der Eltern-Resolver zurückgegeben hat. Deshalb ist `getProductType` **ein Aufruf, nicht ein Aufruf pro Feld**.
+`name`, `breadcrumb`, `navigation`, `totalCount`, `price`, `brand` und `rating` haben keinen Resolver. GraphQL liest `productType.name` oder `product.price` aus dem `parent`-Objekt. Deshalb ist `getProductType` **ein Aufruf, nicht ein Aufruf pro Feld**.
 
 Der Server führt die Resolver Ebene für Ebene aus: `products` wartet auf `productType`, und `items` wartet auf `products`. **Der Wasserfall ist noch da, aber er läuft direkt neben den Services:**
 
-![GraphQL: ein Round Trip für den Browser, drei kurze Runden auf dem Server](./assets/graphql-waterfall.png)
+![GraphQL: ein Round Trip für den Browser, drei kurze Schritte auf dem Server](./assets/graphql-waterfall.png)
 
-Auch das Over-Fetching ist umgezogen: Der Service von Team C liefert weiterhin das ganze Produkt mit 60 Spezifikationen, aber an den GraphQL-Server im selben Rechenzentrum. **Nur die fünf Felder, die die Seite angefragt hat, reisen zum Smartphone.**
+Auch das Over-Fetching ist umgezogen: Der Service von Team C liefert weiterhin das ganze Produkt mit 60 Spezifikationen, aber an den GraphQL-Server im selben Rechenzentrum. **Nur die Felder, die die Seite angefragt hat, reisen zum Smartphone**: fünf pro Kachel statt des ganzen Produkts.
 
 Doku: [graphql.org: Execution](https://graphql.org/learn/execution/), [Apollo Server: Resolver](https://www.apollographql.com/docs/apollo-server/data/resolvers)
 
 <details>
 <summary>Weiterführend: das N+1-Problem und DataLoader</summary>
 
-Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze Liste der IDs auf einmal bekommt. Oft sieht es anders aus: Ein `Product.brand`-Resolver läuft einmal pro Produkt, also verursachen 48 Produkte einen Request für die Liste plus 48 für die Marken. Das ist das **N+1-Problem**.
+Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze Liste der IDs auf einmal bekommt. Oft sieht es anders aus. Angenommen, `brand` käme aus einem eigenen Service und hätte deshalb einen Resolver: Ein `Product.brand`-Resolver läuft einmal pro Produkt, also verursachen 48 Produkte einen Request für die Liste plus 48 für die Marken. Das ist das **N+1-Problem**.
 
 **DataLoader** sammelt die Keys, nach denen Resolver während der Ausführung der Query fragen, und ruft eine Batch-Funktion einmal auf:
 
@@ -388,7 +388,7 @@ Eine Query pro Seite löst den Wasserfall für den Browser. **Aber wer schreibt 
 - Schreibt **die Seite** die Query, listet sie jedes Feld jedes Teams auf. Jedes neue Feld auf einer Kachel heisst, die Query der Seite anzupassen, und niemand wagt es, ein Feld zu entfernen, also wächst die Query nur.
 - Holt **jede Komponente** ihre eigenen Daten, sind die Teams wieder unabhängig, aber wir sind zurück bei vielen Requests und Wasserfällen.
 
-Die Lösung ist **Colocation**: Jede Komponente deklariert ihre Felder direkt neben ihrem Code, als **Fragment**. Ein Fragment ist eine benannte Liste von Feldern auf einem Typ, und `...Name` fügt es in eine Query ein. Ein Name wie `ProductTile_product` bedeutet: was `ProductTile` von einem `product` braucht.
+Die Lösung heisst **Colocation** (hier nicht im Sinn von Server-Housing im Rechenzentrum): Jede Komponente deklariert ihre Felder direkt neben ihrem Code, als **Fragment**. Ein Fragment ist eine benannte Liste von Feldern auf einem Typ, und `...Name` fügt es in eine Query ein. Ein Name wie `ProductTile_product` bedeutet: was `ProductTile` von einem `product` braucht.
 
 ### Die Produktkachel und ihr Fragment
 
@@ -396,7 +396,7 @@ Die Kachel zeigt fünf Dinge, also listet ihr Fragment fünf Felder:
 
 ![Die Produktkachel und die Felder ihres Fragments](./assets/product-tile-fragment.png)
 
-Queries und Fragments sind gewöhnliche Strings, deshalb **kann TypeScript sie nicht prüfen**. Ein Codegenerator wie GraphQL Codegen liest sie zusammen mit dem Schema und schreibt für jede einen Typ, so wie OpenAPI-Codegen das für REST tut. Du packst jeden String in die generierte Funktion `graphql(...)`, um diesen Typ zu bekommen.
+Queries und Fragments sind gewöhnliche Strings, deshalb **kann TypeScript sie nicht prüfen**. Ein Codegenerator wie GraphQL Codegen liest sie zusammen mit dem Schema und schreibt für jede einen Typ, so wie OpenAPI-Codegen das für REST tut. Du packst jeden String in die generierte Funktion `graphql(...)`, um diesen Typ zu bekommen. Die Funktion zum Demaskieren heisst im Client Preset standardmässig `useFragment`, obwohl sie kein React Hook ist. Wir benennen sie mit der Option `fragmentMasking: { unmaskFunctionName: 'getFragmentData' }` um.
 
 ```tsx
 import { graphql, type FragmentType, getFragmentData } from "./gql";
@@ -446,7 +446,7 @@ export const ProductListFragment = graphql(`
 
 // in ProductList, after unmasking its own fragment
 <h2>{productType.products.totalCount} products</h2>
-{productType.products.items.map((item) => <ProductTile key={item.id} product={item} />)}
+{productType.products.items?.map((item) => <ProductTile key={item.id} product={item} />)}
 ```
 
 `ProductTypePage`, die Seitenkomponente von Team A, setzt nur die Fragments ihrer direkten Kinder zusammen:
@@ -497,7 +497,7 @@ GET /api/product-lists?productTypeId=3137&include=products
 
 JSON:API nennt das **Inclusion of Related Resources**, Stripe nennt es **Expanding** einer Response (`expand[]=...`). Das löst das Problem nur teilweise:
 
-- **Over-Fetching bleibt.** Jedes eingebettete Produkt kommt weiterhin mit seiner Beschreibung und 60 Spezifikationen.
+- **Over-Fetching bleibt meist.** Ohne Feldauswahl kommt jedes eingebettete Produkt weiterhin mit seiner Beschreibung und 60 Spezifikationen. JSON:API kann das mit Sparse Fieldsets (`fields[...]`) eingrenzen, aber auch das muss jeder Endpoint selbst umsetzen.
 - **Die Daten müssen dort verknüpfbar sein.** Der Service von Team B kann Produkte nur einbetten, wenn er an die Daten von Team C herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
 - **Jeder Endpoint implementiert es neu.** Jede Response, die Produkte einbettet, und tiefere Daten wie `include=products.brand`, muss die Verknüpfung selbst machen.
 
@@ -513,7 +513,7 @@ GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
 | --- | --- | --- |
 | **Caching** | Die URL ist der Cache-Key. Browser und CDNs (geteilte Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Eine **Persisted Query** hilft: ein `GET` mit einer kurzen ID für eine Query, die der Server schon kennt. |
 | **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP. | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP. |
-| **Fehler** | Ein Statuscode pro Request. | Ein fehlgeschlagenes Feld liefert trotzdem ein 2xx, meist `200`. Monitoring, das Statuscodes zählt, verpasst es. |
+| **Fehler** | Ein Statuscode pro Request. | Ein fehlgeschlagenes Feld liefert meist trotzdem `200`, solange `data` Daten enthält. Monitoring, das Statuscodes zählt, verpasst es. |
 | **Autorisierung** | Wird in jedem Route Handler geprüft. | Viele Queries erreichen dasselbe Feld, also prüfst du Berechtigungen einmal, im Code, den die Resolver aufrufen. |
 | **Teure Queries** | Jeder Request ist im Voraus bekannt. | Clients schreiben ihre eigenen: 48 Produkte mit je 60 Spezifikationen und 50 Reviews. Server begrenzen Tiefe und Kosten. |
 | **Betrieb** | `fetch` und Express. | Ein Schema, ein Server, den ein Team betreibt, Codegen, Schema-Checks im CI. |

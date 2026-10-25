@@ -25,7 +25,7 @@ Webseiten und Apps hängen zudem von interner Kommunikation zwischen Services ab
 
 ### Was ist Lazy Loading?
 
-Lazy Loading ist eine Technik, bei der Ressourcen wie Bilder oder JavaScript erst geladen werden, wenn sie benötigt werden, zum Beispiel wenn sie im sichtbaren Bereich der Seite (Viewport) erscheinen. Das verkürzt die initiale Ladezeit und verbessert die Benutzererfahrung, weil der Browser grosse Dateien nicht schon zu Beginn lädt.
+Lazy Loading ist eine Technik, bei der Ressourcen wie Bilder oder JavaScript erst geladen werden, wenn sie benötigt werden, zum Beispiel wenn sie im Darstellungsbereich (Viewport) erscheinen. Das verkürzt die initiale Ladezeit und verbessert die Benutzererfahrung, weil der Browser grosse Dateien nicht schon zu Beginn lädt.
 
 ![Ladelösung](./assets/loading-solution.png)
 
@@ -177,7 +177,7 @@ document.querySelectorAll(".page").forEach(page => {
 
 ### Lazy Loading in Aktion
 
-Mit dem `IntersectionObserver` kannst du jetzt Lazy Loading umsetzen. Du lädst Ressourcen wie JavaScript-Module, Daten oder Bilder erst, wenn sie gebraucht werden. Das reduziert die initiale Ladezeit und entlastet den Main Thread, der zu Beginn weniger verarbeiten muss. Beides verbessert die Benutzererfahrung.
+Mit dem `IntersectionObserver` kannst du jetzt Lazy Loading umsetzen. Du lädst Ressourcen wie JavaScript-Module, Daten oder Bilder erst, wenn sie gebraucht werden. Das reduziert die initiale Ladezeit und entlastet den Hauptthread, der zu Beginn weniger verarbeiten muss. Beides verbessert die Benutzererfahrung.
 
 **Demo** 🤯
 
@@ -187,7 +187,7 @@ Mit dem `IntersectionObserver` kannst du jetzt Lazy Loading umsetzen. Du lädst 
 
 In React lädst du mit `lazy` den Code einer Komponente erst, wenn sie zum ersten Mal gerendert wird. Anstatt die Komponente direkt mit `import LazyComponent from './LazyComponent.tsx'` zu importieren, erstellst du mit `lazy` eine neue Komponente, die einen dynamischen Import von `LazyComponent` ausführt.
 
-Dabei gelten drei Regeln. Das Modul muss die Komponente als `default`-Export exportieren. Deklariere die Lazy-Komponente auf oberster Ebene des Moduls, nie innerhalb einer anderen Komponente, sonst wird ihr State bei jedem Render zurückgesetzt. Und während der Code lädt, suspendiert die Komponente. Pack sie deshalb in eine `<Suspense>`-Boundary mit Fallback.
+Dabei gelten drei Regeln. Das Modul muss die Komponente als `default`-Export exportieren. Deklariere die Lazy-Komponente auf oberster Ebene des Moduls, nie innerhalb einer anderen Komponente, sonst wird ihr State bei jedem Render zurückgesetzt. Und während der Code lädt, suspendiert die Komponente (React pausiert ihr Rendering). Pack sie deshalb in eine `<Suspense>`-Boundary mit Fallback.
 
 ```tsx
 import { lazy, Suspense } from "react";
@@ -251,7 +251,7 @@ export default function App() {
 
 ### Layout Shifts
 
-Wie die Demo zeigt, verhält sich Page 3 merkwürdig: Sie rutscht nach unten, sobald die Komponente auf Page 2 geladen ist. Das nennt man einen Layout Shift. Layout Shifts beeinträchtigen die Benutzererfahrung erheblich, weil der Inhalt der Seite plötzlich springt. Sie kosten dich auch beim SEO ([Cumulative Layout Shift](https://web.dev/articles/cls)).
+Wie die Demo zeigt, verhält sich Page 3 merkwürdig: Sie rutscht nach unten, sobald die Komponente auf Page 2 geladen ist. Das nennt man eine Layoutverschiebung (Layout Shift). Layout Shifts beeinträchtigen die Benutzererfahrung erheblich, weil der Inhalt der Seite plötzlich springt. Sie kosten dich auch beim SEO ([Cumulative Layout Shift](https://web.dev/articles/cls)).
 
 Layout Shifts entstehen, wenn Elemente auf der Seite noch nicht bereit sind, wenn der Benutzer sie zum ersten Mal sieht. Manchmal wollen wir Inhalte aber gar nicht von Anfang an anzeigen. Was können wir also gegen diese Layout Shifts tun?
 
@@ -260,15 +260,15 @@ Layout Shifts entstehen, wenn Elemente auf der Seite noch nicht bereit sind, wen
 - [Pokémon-Liste mit Layout Shifts (Sandbox)](https://codesandbox.io/s/kzdh37?file=/src/App.tsx)
 - [Pokémon-Liste mit Layout Shifts (Resultat)](https://kzdh37.csb.app/)
 
-Die Demo zeigt: Die vielen Pokémon-Namen auf dem Bildschirm lösen unsere `useInView`-Hooks aus, und die App lädt Daten für viel zu viele Pokémon.
+Die Demo zeigt: Die vielen Pokémon-Namen auf dem Bildschirm lösen unsere `useInView`-Hooks aus, und die App lädt Daten für viel zu viele Pokémon. Das wollen wir nicht.
 
-Die Lösung ist, den Platz für den Inhalt von Anfang an zu reservieren. Eine Möglichkeit dafür sind Skeletons. Ein Skeleton sieht ungefähr aus wie der echte Inhalt, nur ohne die Details. Weil wir nicht wissen, welchen Inhalt das Backend liefert, können wir den Platz nur ungefähr reservieren. Das ist nicht perfekt, aber deutlich besser als nichts.
+Die Lösung ist, den Platz für den Inhalt von Anfang an zu reservieren. Eine Möglichkeit dafür sind Skeletons (Platzhalter in der Form des Inhalts). Ein Skeleton sieht ungefähr aus wie der echte Inhalt, nur ohne die Details. Weil wir nicht wissen, welchen Inhalt das Backend liefert, können wir den Platz nur ungefähr reservieren. Das ist nicht perfekt, aber deutlich besser als nichts.
 
 ![Skeletons](./assets/skeletons.png)
 
 **Hilfreiche Links**
 
-- [Skeleton Screen - Galaxus](https://www.galaxus.ch/designsystem/patterns/skeleton-screen)
+- [Skeleton - Galaxus Design System](https://www.galaxus.ch/designsystem/components/skeleton-design)
 
 ## Alles kombinieren
 
@@ -281,7 +281,7 @@ Kombiniert ergibt das eine Lösung, die performant ist und dem Benutzer eine gut
 
 Lazy Loading spart Arbeit auf der aktuellen Seite. Den Preis zahlst du auf der nächsten: Wenn der Benutzer auf einen Link klickt, sind Code und Daten für diese Seite noch nicht geladen, und er wartet. Prefetching heisst, die Ressourcen für einen wahrscheinlichen nächsten Schritt im Hintergrund zu laden, bevor der Benutzer danach fragt.
 
-### Prefetching bei Absicht
+### Prefetching bei erkannter Absicht
 
 Das stärkste Signal ist das Verhalten des Benutzers selbst. Ruht der Mauszeiger auf einem Link oder bekommt der Link den Tastaturfokus, ist ein Klick wahrscheinlich. Starte bei `mouseenter` und `focus` einen kurzen Timer (etwa 100 ms) und brich ihn bei `mouseleave` und `blur` ab. Die Verzögerung filtert den Mauszeiger heraus, der nur auf dem Weg woandershin über einen Link fährt. Auf Touchscreens gibt es kein Hover, also lade bei `touchstart` vor: Das Event feuert einen Moment vor dem Klick.
 
@@ -327,23 +327,23 @@ export function usePrefetchOnIntent<T extends HTMLElement>(prefetch: () => void)
 
 Übergib eine stabile Funktion, zum Beispiel eine in `useCallback` gewrappte, und setze das zurückgegebene `ref` auf den Link. In der Funktion rufst du auf, was den nächsten Schritt lädt: ein `fetch()` für die Daten der nächsten Seite oder den `import()` einer Lazy-Komponente.
 
-### Prefetching, wenn der Browser idle ist
+### Prefetching im Leerlauf
 
-Manche Links sind auch ohne Hover wahrscheinlich, etwa der "Nächste Seite"-Link einer Liste. Diese kannst du vorladen, wenn der Browser nichts anderes zu tun hat. `requestIdleCallback` führt ein Callback in einer Leerlaufphase des Main Threads aus. Gib ihm ein `timeout` mit, sonst wartet das Callback unter Umständen sekundenlang. Safari unterstützt es noch nicht, nimm dort `setTimeout` als Fallback.
+Manche Links sind auch ohne Hover wahrscheinlich, etwa der "Nächste Seite"-Link einer Liste. Diese kannst du vorab abrufen, wenn der Browser nichts anderes zu tun hat. `requestIdleCallback` führt ein Callback aus, wenn der Hauptthread im Leerlauf ist. Gib ihm ein `timeout` mit, sonst wartet das Callback unter Umständen sekundenlang. Safari aktiviert es standardmässig noch nicht (nur hinter einem Flag), nimm dort `setTimeout` als Fallback.
 
-Kombiniere beide Bedingungen: Lade einen Link nur vor, wenn er im Viewport ist *und* der Browser idle ist. Beobachte den Link mit einem `IntersectionObserver`. Kommt er in den Viewport, plane das Prefetching mit `requestIdleCallback` ein. Verlässt er den Viewport, bevor das Callback gelaufen ist, brich es mit `cancelIdleCallback` ab. So löst ein Benutzer, der schnell durch eine lange Liste scrollt, nicht für jeden Link unterwegs ein Prefetching aus.
+Kombiniere beide Bedingungen: Rufe einen Link nur vorab ab, wenn er im Viewport ist *und* der Browser im Leerlauf ist. Beobachte den Link mit einem `IntersectionObserver`. Kommt er in den Viewport, plane das Prefetching mit `requestIdleCallback` ein. Verlässt er den Viewport, bevor das Callback gelaufen ist, brich es mit `cancelIdleCallback` ab. So löst ein Benutzer, der schnell durch eine lange Liste scrollt, nicht für jeden Link unterwegs ein Prefetching aus.
 
 Doku: [MDN: requestIdleCallback](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
 
 ### Warum alles vorzuladen schadet
 
-Prefetching ist eine Wette: Du setzt Bandbreite, Datenvolumen und CPU des Benutzers für eine Seite ein, die er vielleicht öffnet. Jedes Prefetching, das nie genutzt wird, ist verschwendet. Schlimmer noch: Prefetches konkurrieren mit den Requests, die jetzt zählen, also dem LCP-Bild, den Daten für die Seite, die der Benutzer gerade ansieht, und dem JavaScript, das sie interaktiv macht. Auf einer langsamen mobilen Verbindung kann sich eine Seite mit 50 vorgeladenen Links langsamer anfühlen als eine ohne. Auch deine Server zahlen: Jedes Prefetching ist ein Request, den sie beantworten müssen, oft ein vollständiges Rendering der Seite.
+Prefetching ist eine Wette: Du setzt Bandbreite, Datenvolumen und CPU des Benutzers für eine Seite ein, die er vielleicht öffnet. Jedes Prefetching, das nie genutzt wird, ist verschwendet. Schlimmer noch: Prefetches konkurrieren mit den Requests, die jetzt zählen, also dem LCP-Bild, den Daten für die Seite, die der Benutzer gerade ansieht, und dem JavaScript, das sie interaktiv macht. Auf einer langsamen mobilen Verbindung kann sich eine Seite mit 50 vorab abgerufenen Links langsamer anfühlen als eine ohne. Auch deine Server zahlen: Jedes Prefetching ist ein Request, den sie beantworten müssen, oft ein vollständiges Rendering der Seite.
 
-Deshalb raten grosse Websites nicht. Sie vergleichen Prefetching-Strategien in A/B-Tests anhand echter Benutzermetriken und Serverkosten. Oft ist das Ergebnis, pauschales Link-Prefetching abzuschalten und nur gezieltes Prefetching bei Absicht oder für wenige wertvolle Links zu behalten.
+Deshalb raten grosse Websites nicht. Sie vergleichen Prefetching-Strategien in A/B-Tests anhand echter Benutzermetriken und Serverkosten. Oft ist das Ergebnis, pauschales Link-Prefetching abzuschalten und nur gezieltes Prefetching bei erkannter Absicht oder für wenige wertvolle Links zu behalten.
 
 ### Die Lösung der Plattform: Speculation Rules API
 
-Der Browser kann das für dich übernehmen. Mit der Speculation Rules API beschreibst du in JSON, welche Links der Browser vorladen (das HTML der Seite herunterladen) oder vorrendern (die ganze Seite in einem versteckten Tab laden und rendern) darf. `eagerness` bestimmt den Zeitpunkt: `conservative` bei Pointer- oder Touch-Down, `moderate` nach etwa 200 ms Hover auf dem Desktop, `eager` und `immediate` früher.
+Der Browser kann das für dich übernehmen. Mit der Speculation Rules API beschreibst du in JSON, welche Links der Browser vorab abrufen (Prefetch: das HTML der Seite herunterladen) oder vorab rendern (Prerender: die ganze Seite in einem versteckten Tab laden und rendern) darf. `eagerness` bestimmt den Zeitpunkt: `conservative` bei Pointer- oder Touch-Down, `moderate` nach etwa 200 ms Hover auf dem Desktop, `eager` und `immediate` früher.
 
 ```html
 <script type="speculationrules">
@@ -356,7 +356,7 @@ Der Browser kann das für dich übernehmen. Mit der Speculation Rules API beschr
 </script>
 ```
 
-Die Regeln gelten für vollständige Dokument-Navigationen. Sie passen deshalb besser zu Multi-Page-Sites als zur clientseitigen Navigation in einer Single-Page-App. Stand Oktober 2026 unterstützen Chrome und Edge sie vollständig. Safari ab 26.2 unterstützt Prefetch nur hinter einem Feature Flag, Firefox nur in Preview-Builds. Browser ohne Unterstützung ignorieren das Script, du kannst es also gefahrlos als Progressive Enhancement einbauen.
+Die Regeln gelten für vollständige Dokument-Navigationen. Sie passen deshalb besser zu Multi-Page-Sites als zur clientseitigen Navigation in einer Single-Page-App. Stand Oktober 2026 unterstützen Chrome und Edge sie vollständig. Safari ab 26.2 unterstützt Prefetch nur hinter einem Feature Flag, Firefox unterstützt sie nicht. Browser ohne Unterstützung ignorieren das Script, du kannst es also gefahrlos als Progressive Enhancement einbauen.
 
 Doku: [MDN: Speculation Rules API](https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API), [Chrome for Developers: Prerender pages](https://developer.chrome.com/docs/web-platform/prerender-pages)
 
@@ -366,4 +366,4 @@ Doku: [MDN: Speculation Rules API](https://developer.mozilla.org/en-US/docs/Web/
 * Nutze für Bilder und iframes `loading="lazy"`, aber nie für Inhalte, die beim ersten Laden sichtbar sind.
 * Erkenne für Komponenten und Daten den Viewport mit dem `IntersectionObserver` (oder `react-intersection-observer`) und lade den Code mit `lazy` innerhalb einer `<Suspense>`-Boundary.
 * Reserviere den Platz für Lazy-Inhalte mit Abmessungen oder Skeletons, damit die Seite nicht springt.
-* Lade den nächsten Schritt bei Absicht oder im Idle-Zustand des Browsers vor, nicht alles auf einmal, und miss, ob es hilft.
+* Rufe den nächsten Schritt bei erkannter Absicht oder im Leerlauf des Browsers vorab ab, nicht alles auf einmal, und miss, ob es hilft.
