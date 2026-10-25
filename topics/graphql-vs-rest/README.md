@@ -1,6 +1,6 @@
 # Over- und Under-Fetching lösen mit GraphQL
 
-> Öffne auf galaxus.ch eine Produkttyp-Seite. Die Navigation, die Produktliste und jede Produktkachel stammen von verschiedenen Teams und verschiedenen Services. Mit REST hangelt sich der Browser von einer API zur nächsten und bekommt gleichzeitig zu viele und zu wenige Daten. GraphQL löst das: Die Seite fragt in einem Request genau die Felder an, die sie anzeigt, und jede Komponente deklariert ihren eigenen Teil. Dazu: wo GraphQL an Grenzen stösst und warum REST an den Rändern bleibt.
+> Öffne auf galaxus.ch eine Produkttyp-Seite. Die Navigation, die Produktliste und jede Produktkachel stammen von verschiedenen Teams und verschiedenen Services. Mit REST hangelt sich der Browser von einer API zur nächsten und bekommt gleichzeitig zu viele und zu wenige Daten. GraphQL löst das für den Browser: Die Seite fragt in einem Request genau die Felder an, die sie anzeigt, und jede Komponente deklariert ihren eigenen Teil.
 
 **Dauer:** etwa 60 Minuten
 
@@ -117,15 +117,13 @@ Der Browser fragt Team C **für jedes der 48 Produkte** einzeln an:
 
 ### Under-Fetching, Over-Fetching und ein Wasserfall
 
-**Die drei Runden warten aufeinander:**
-
 ![Der REST-Wasserfall: drei Runden von Requests, jede wartet auf die vorherige](./assets/rest-waterfall.png)
 
 Drei Probleme, und die ersten beiden treten gleichzeitig auf:
 
 - **Under-Fetching.** Einer Response fehlen Daten, die die Seite braucht. Die Produktliste enthält nur Links, jede Kachel braucht einen eigenen Request.
 - **Over-Fetching.** Eine Response enthält Daten, die die Seite nicht braucht. Jedes Produkt kommt mit Beschreibung und 60 Spezifikationen, obwohl die Kachel fünf Felder zeigt.
-- **Wasserfall.** Jede Runde wartet auf die vorherige. `Promise.all` hilft nur innerhalb einer Runde. Auch HTTP/2 und HTTP/3 ändern daran nichts: Sie machen einzelne Requests billiger, aber eine Runde, die auf die Daten der vorherigen wartet, wartet trotzdem.
+- **Wasserfall.** Jede Runde wartet auf die vorherige. `Promise.all` hilft nur innerhalb einer Runde. HTTP/2 und HTTP/3 ändern daran nichts: Eine Runde, die auf die Daten der vorherigen wartet, wartet trotzdem.
 
 Jede Runde kostet mindestens einen Round Trip. Auf 4G dauert er typischerweise unter 100 ms, auf 3G 100 bis 500 ms ([High Performance Browser Networking](https://hpbn.co/mobile-networks/)). Die Zahlen in den Grafiken sind Beispielwerte.
 
@@ -365,11 +363,11 @@ Doku: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataL
 }
 ```
 
-Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**.
+Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**. Apollo Client verwirft `data` bei Fehlern standardmässig, mit `errorPolicy: 'all'` bleiben die Teildaten erhalten.
 
 Aus der Praxis: Der GraphQL-Server selbst steht selten im Weg, aber **die Fehlerbehandlung wird aufwändiger**. Für jede mögliche Teilantwort braucht die Seite ein sinnvolles Verhalten.
 
-Doku: [Response](https://graphql.org/learn/response/), [Spec: Handling Field Errors](https://spec.graphql.org/October2021/#sec-Handling-Field-Errors)
+Doku: [Response](https://graphql.org/learn/response/), [Spec: Handling Execution Errors](https://spec.graphql.org/September2025/#sec-Handling-Execution-Errors), [Apollo Client: Error Handling](https://www.apollographql.com/docs/react/data/error-handling)
 
 ## Fragments: jede Komponente deklariert ihre Daten
 
@@ -431,7 +429,7 @@ export function ProductTile(props: ProductTileProps) {
 }
 ```
 
-Was `getFragmentData` macht, erklärt der Abschnitt [Data Masking](#data-masking). Im Codegen-Standard heisst die Funktion `useFragment`, siehe das Detail-Element dort.
+Was `getFragmentData` macht, erklärt der Abschnitt [Data Masking](#data-masking). Im Codegen-Standard heisst sie `useFragment` (siehe Detail unten).
 
 ### Die Query der Seite zusammensetzen
 
@@ -439,6 +437,7 @@ Was `getFragmentData` macht, erklärt der Abschnitt [Data Masking](#data-masking
 
 ```tsx
 export const ProductListFragment = graphql(`
+  # $tagIds is declared by the page query
   fragment ProductList_productType on ProductType {
     products(tagIds: $tagIds, first: 48) {
       totalCount
@@ -475,9 +474,9 @@ query ProductTypePage($id: ID!, $tagIds: [ID!]) {
 }
 ```
 
-An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben, und **die Seite schickt weiterhin einen Request**. Variablen wie `$tagIds` deklariert die Query der Seite, die Fragments dürfen sie verwenden.
+An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**. Variablen wie `$tagIds` deklariert die Query der Seite, die Fragments dürfen sie verwenden.
 
-Fügt Team C der Kachel ein Feld hinzu, ändert das Team nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
+Fügt Team C der Kachel ein Feld hinzu, das es im Schema schon gibt, ändert das Team nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
 
 ### Data Masking
 
@@ -488,7 +487,7 @@ item.id; // fine: ProductList asked for it
 item.price; // TypeScript error: only ProductTile asked for it
 ```
 
-**Entfernst du ein Feld aus deinem Fragment, kann nur deine eigene Komponente kaputtgehen.**
+**Entfernst du ein Feld aus deinem Fragment, kann nur deine eigene Komponente kaputtgehen** (zumindest bei den Typen).
 
 Doku: [graphql.org: Fragments](https://graphql.org/learn/queries/#fragments), [The Guild: Fragments mit GraphQL Codegen](https://the-guild.dev/blog/unleash-the-power-of-fragments-with-graphql-codegen), [Codegen Client Preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
 
@@ -505,7 +504,7 @@ Doku: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architect
 
 ## Geht das nicht auch mit REST?
 
-### Der faire Vergleich
+### Parallel laden, Batch und BFF
 
 Unser REST-Beispiel ist bewusst naiv. Ein REST-Team kann den Wasserfall stark verkürzen:
 
@@ -529,9 +528,9 @@ JSON:API nennt das **Inclusion of Related Resources**, Stripe **Expanding** eine
 - **Die Daten müssen dort erreichbar sein.** Der Service von Team B kann Produkte nur einbetten, wenn er an die Daten von Team C herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
 - **Jeder Endpoint implementiert es neu**, auch für tiefere Daten wie `include=products.brand`.
 
-Ein Beispiel aus der Praxis: Bei den Kommentaren eines Blogposts haben wir die Antworten auf jeden Kommentar per `include` mitgeladen, also eine verschachtelte Pagination in einem Request. Die Benutzerdaten zu den Kommentaren kamen aber nicht mit, dafür brauchte es einen weiteren Request pro Kommentar. Der Gewinn war bescheiden.
+Aus der Praxis: Bei den Kommentaren eines Blogposts haben wir die Antworten auf jeden Kommentar per `include` mitgeladen, also eine verschachtelte Pagination in einem Request. Die Benutzerdaten zu den Kommentaren kamen aber nicht mit, dafür brauchte es einen weiteren Request pro Kommentar. Der Gewinn war bescheiden.
 
-GraphQL löst die Verknüpfung einmal in den Resolvern, und jede Query nutzt sie.
+GraphQL löst die Verknüpfung einmal in den Resolvern (gegen N+1 mit DataLoader), und jede Query nutzt sie.
 
 Doku: [JSON:API: Inclusion of Related Resources](https://jsonapi.org/format/#fetching-includes), [Stripe: Expanding Responses](https://docs.stripe.com/expand)
 
@@ -546,14 +545,14 @@ Doku: [Apollo Client: Caching](https://www.apollographql.com/docs/react/caching/
 
 GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
 
-| Thema             | REST                                                                                                                   | GraphQL                                                                                                                                          |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs (Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Abhilfe: **Persisted Queries** (siehe unten).                                             |
-| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                                                    | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                             |
-| **Fehler**        | Ein Statuscode pro Request.                                                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                   |
-| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                                                   | Viele Queries erreichen dasselbe Feld, also prüfst du Berechtigungen einmal, im Code, den die Resolver aufrufen.                                 |
-| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries (**Trusted Documents**) und begrenzt Tiefe und Kosten. |
-| **Betrieb**       | Endpoints, die die Teams ohnehin betreiben.                                                                            | Ein zusätzlicher Server, den ein Team betreibt, dazu Codegen und Schema-Checks im CI.                                                            |
+| Thema             | REST                                                                                                                   | GraphQL                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs (Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Abhilfe: **Persisted Queries** (siehe unten).                                                                      |
+| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                                                    | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                                                      |
+| **Fehler**        | Ein Statuscode pro Request.                                                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                                            |
+| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                                                   | Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen. |
+| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries (**Trusted Documents**) und begrenzt Tiefe und Kosten.                          |
+| **Betrieb**       | Endpoints, die die Teams ohnehin betreiben.                                                                            | Ein zusätzlicher Server, den ein Team betreibt, dazu Codegen und Schema-Checks im CI.                                                                                     |
 
 Doku: [Best Practices](https://graphql.org/learn/best-practices/), [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
 
@@ -591,7 +590,7 @@ Doku: [graphql.org: Federation](https://graphql.org/learn/federation/)
 
 ## Zusammenfassung
 
-- **GraphQL löst Over- und Under-Fetching:** Die Seite fragt in einem Request genau ihre Felder an, Resolver holen sie bei den Services der Teams.
+- **GraphQL löst Over- und Under-Fetching für den Browser:** Die Seite fragt in einem Request genau ihre Felder an, Resolver holen sie bei den Services der Teams.
 - Mit Fragments deklariert jede Komponente ihre eigenen Felder, und die Teams bleiben unabhängig.
 - Mit REST lädt dieselbe Seite als Wasserfall. Batch-Endpoints und ein BFF helfen, brauchen aber Arbeit pro Seite.
 - Der Preis: Mit GraphQL verlierst du das Caching über die URL und ehrliche Statuscodes, dazu kommen aufwändigere Fehlerbehandlung und ein Server, den jemand betreibt.
