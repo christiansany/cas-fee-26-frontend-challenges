@@ -427,15 +427,15 @@ import { graphql, type FragmentType, getFragmentData } from "./gql";
 
 export const ProductTileFragment = graphql(`
   fragment ProductTile_product on Product {
-    name
-    brand {
-      name
-    }
+    imageUrl
     price {
       amount
       currency
     }
-    imageUrl
+    brand {
+      name
+    }
+    name
     rating {
       average
       count
