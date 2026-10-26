@@ -125,7 +125,7 @@ Drei Probleme, und die ersten beiden treten gleichzeitig auf:
 - **Over-Fetching.** Eine Response enthält Daten, die die Seite nicht braucht. Jedes Produkt kommt mit Beschreibung und 60 Spezifikationen, obwohl die Kachel fünf Felder zeigt.
 - **Wasserfall.** Jede Runde wartet auf die vorherige.
 
-Jede Runde kostet mindestens einen Round Trip. Auf 4G dauert er typischerweise unter 100 ms, auf 3G 100 bis 500 ms ([High Performance Browser Networking](https://hpbn.co/mobile-networks/)). Die Zahlen in den Grafiken sind Beispielwerte.
+Jede Runde kostet mindestens einen Round Trip, im Mobilnetz bis zu mehreren hundert Millisekunden ([Quelle](https://hpbn.co/mobile-networks/)). Die Zahlen in den Grafiken sind Beispielwerte.
 
 ## Die Lösung: GraphQL
 
@@ -179,13 +179,13 @@ type Project {
 | **Query**               | Ein `GET`-Request                   |
 | **Resolver**            | Ein Route Handler                   |
 
-Schreibzugriffe heissen **Mutation**, wie `POST`, `PUT` oder `DELETE`. Jede Query und jede Mutation geht **an dieselbe URL**, meist als `POST /graphql` mit der Query und ihren Variablen im JSON-Body.
+Schreibzugriffe heissen **Mutation** (wie `POST`, `PUT`, `DELETE`). Alles geht **an dieselbe URL**, meist `POST /graphql`.
 
-Doku: [graphql.org](https://graphql.org/), [Queries](https://graphql.org/learn/queries/), [Schemas und Typen](https://graphql.org/learn/schema/), [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/)
+Doku: [Queries](https://graphql.org/learn/queries/), [Schemas und Typen](https://graphql.org/learn/schema/)
 
 ### Eine Query für die ganze Seite
 
-Ein GraphQL-Server ist **eine eigene Schicht zwischen Browser und Services**. Sein Schema und seine Resolver schreibst du selbst, zum Beispiel mit Apollo Server oder GraphQL Yoga. Für unsere Seite sieht das Schema vereinfacht so aus:
+Ein GraphQL-Server ist **eine eigene Schicht zwischen Browser und Services**. Sein Schema und seine Resolver schreibst du selbst. Für unsere Seite sieht das Schema vereinfacht so aus:
 
 ```graphql
 type Query {
@@ -218,7 +218,7 @@ type Product {
 
 **Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Service des Produktlisten-Teams es beantwortet.
 
-Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` ist eine **Variable**: Ihr Wert reist als JSON neben der Query mit, wie ein Routenparameter.
+Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` ist eine **Variable**, wie ein Routenparameter.
 
 **Query**
 
@@ -274,15 +274,13 @@ query ProductTypePage($id: ID!) {
 
 Ein Request, kein `seoText`, keine Spezifikationen, keine Links zum Folgen. **Zwischen Browser und Server sind Over-Fetching und Under-Fetching weg.**
 
-Doku: [Variablen](https://graphql.org/learn/queries/#variables)
-
 ### Resolver: wie der Server die Daten sammelt
 
-Der GraphQL-Server trägt die Daten aus den drei Services mit **Resolvern** zusammen: Funktionen, die den Wert eines Felds liefern. **Nicht jedes Feld braucht einen.** Die Felder eines zurückgegebenen Objekts liest GraphQL direkt daraus. Ein eigener Resolver ist nur nötig, wenn die Daten von woanders kommen oder Arbeit brauchen:
+Der GraphQL-Server trägt die Daten aus den drei Services mit **Resolvern** zusammen: Funktionen, die den Wert eines Felds liefern. **Nicht jedes Feld braucht einen.** Ein eigener Resolver ist nur nötig, wenn die Daten von woanders kommen oder Arbeit brauchen. Alle anderen Felder liest GraphQL aus dem zurückgegebenen Objekt:
 
 ![Die Query der Seite: Vier Felder haben einen eigenen Resolver, der Rest kommt mit dem parent-Objekt](./assets/resolvers.png)
 
-Jeder Resolver bekommt den Rückgabewert des übergeordneten Felds (`parent`), die Argumente des Felds (`args`) und einen `context` mit den API-Clients für diesen Request:
+Ein Resolver bekommt drei Dinge: `parent` (den Wert des übergeordneten Felds), `args` (die Argumente) und `context` (die API-Clients):
 
 ```ts
 const resolvers = {
@@ -309,7 +307,7 @@ const resolvers = {
 };
 ```
 
-Alle anderen Felder liest GraphQL aus dem `parent`-Objekt. Deshalb ist `getProductType` **ein Aufruf, nicht einer pro Feld**.
+So ist `getProductType` **ein Aufruf, nicht einer pro Feld**.
 
 Der Server führt die Resolver Ebene für Ebene aus: `products` wartet auf `productType`, und `items` wartet auf `products`. **Der Wasserfall ist noch da, aber er läuft im Rechenzentrum**, wo ein Aufruf wenige Millisekunden dauert. Der Browser wartet nur noch auf einen Round Trip:
 
@@ -317,12 +315,12 @@ Der Server führt die Resolver Ebene für Ebene aus: `products` wartet auf `prod
 
 Auch das Over-Fetching ist umgezogen: Der Produkt-Service liefert weiterhin das ganze Produkt, aber an den GraphQL-Server im selben Rechenzentrum. **Zum Smartphone reisen nur die angefragten Felder.**
 
-Doku: [graphql.org: Execution](https://graphql.org/learn/execution/), [Apollo Server: Resolver](https://www.apollographql.com/docs/apollo-server/data/resolvers)
+Doku: [Execution](https://graphql.org/learn/execution/)
 
 <details>
 <summary>Weiterführend: das N+1-Problem und DataLoader</summary>
 
-Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze Liste der IDs auf einmal bekommt. Angenommen, `brand` käme aus einem eigenen Service und hätte deshalb einen Resolver: Ein `Product.brand`-Resolver läuft einmal pro Produkt, also gibt es 48 Requests für die Marken, dazu den einen für die Liste (1 + 48). Das ist das **N+1-Problem**.
+Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze Liste der IDs auf einmal bekommt. Angenommen, `brand` hätte einen eigenen Resolver. Er läuft einmal pro Produkt: 48 Requests für die Marken plus 1 für die Liste (1 + 48). Das ist das **N+1-Problem**.
 
 **DataLoader** sammelt die Keys aller `load()`-Aufrufe innerhalb eines Event-Loop-Ticks und ruft eine Batch-Funktion einmal auf:
 
@@ -343,7 +341,7 @@ const brand = (product: Product, _args: unknown, context: Context) =>
 
 Die Batch-Funktion muss pro Key ein Ergebnis zurückgeben, in derselben Reihenfolge wie die Keys.
 
-Doku: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataLoader](https://github.com/graphql/dataloader)
+Doku: [DataLoader](https://github.com/graphql/dataloader)
 
 </details>
 
@@ -360,11 +358,11 @@ Doku: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataL
 }
 ```
 
-Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**. Clients gehen unterschiedlich damit um: Relay gibt die Teildaten weiter und setzt das fehlerhafte Feld auf `null`, Apollo Client verwirft `data` standardmässig (mit `errorPolicy: 'all'` bleiben die Teildaten erhalten).
+Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**. Relay gibt die Teildaten an die Komponenten weiter, das fehlerhafte Feld ist `null`.
 
 Aus der Praxis: Der GraphQL-Server selbst steht selten im Weg, aber **die Fehlerbehandlung wird aufwändiger**. Für jede mögliche Teilantwort braucht die Seite ein sinnvolles Verhalten.
 
-Doku: [Response](https://graphql.org/learn/response/), [Spec: Handling Execution Errors](https://spec.graphql.org/September2025/#sec-Handling-Execution-Errors), [Relay: Field Errors](https://relay.dev/docs/guides/catch-directive/), [Apollo Client: Error Handling](https://www.apollographql.com/docs/react/data/error-handling)
+Doku: [Response](https://graphql.org/learn/response/), [Relay: Field Errors](https://relay.dev/docs/guides/catch-directive/)
 
 ## Fragments: jede Komponente deklariert ihre Daten
 
@@ -385,7 +383,7 @@ Das Fragment der Kachel listet ihre fünf Felder:
 
 _Die Frontend-Beispiele auf dieser Seite nutzen den GraphQL-Client [Relay](https://relay.dev)._
 
-Queries und Fragments stehen in `graphql`-Tags. Ein Compiler liest sie zusammen mit dem Schema und erzeugt für jede einen TypeScript-Typ, so wie OpenAPI-Codegen das für REST tut. `useFragment` liest die Felder des Fragments aus den Daten, die die Komponente bekommt:
+Ein Compiler liest die `graphql`-Tags zusammen mit dem Schema und erzeugt TypeScript-Typen, wie OpenAPI-Codegen bei REST. `useFragment` liefert der Komponente genau die Felder ihres Fragments:
 
 ```tsx
 import { graphql, useFragment } from "react-relay";
@@ -501,7 +499,7 @@ item.price; // TypeScript error, and undefined at runtime: only ProductTile aske
 
 **Entfernst du ein Feld aus deinem Fragment, kann nur deine eigene Komponente kaputtgehen.**
 
-Doku: [graphql.org: Fragments](https://graphql.org/learn/queries/#fragments), [Relay: useFragment](https://relay.dev/docs/api-reference/use-fragment/), [Relay: useLazyLoadQuery](https://relay.dev/docs/api-reference/use-lazy-load-query/)
+Doku: [Fragments](https://graphql.org/learn/queries/#fragments)
 
 ## Geht das nicht auch mit REST?
 
@@ -538,7 +536,7 @@ Doku: [JSON:API: Inclusion of Related Resources](https://jsonapi.org/format/#fet
 ### Was GraphQL zusätzlich bringt
 
 - **Ein normalisierter Client-Cache.** Clients wie Apollo Client oder Relay speichern jedes Objekt einmal, unter seiner ID. Ändert eine Mutation ein Produkt, aktualisiert sich jede Stelle, die es zeigt.
-- **Ein Schema, das sich ohne `/v2` weiterentwickelt.** Neue Felder kommen dazu, alte markierst du mit `@deprecated`, und Tools zeigen, welche Clients ein Feld noch nutzen.
+- **Ein Schema, das sich ohne `/v2` weiterentwickelt.** Neue Felder kommen dazu, alte markierst du mit `@deprecated`.
 
 Doku: [Apollo Client: Caching](https://www.apollographql.com/docs/react/caching/overview), [graphql.org: Schema-Design und Versionierung](https://graphql.org/learn/schema-design/)
 
@@ -546,23 +544,23 @@ Doku: [Apollo Client: Caching](https://www.apollographql.com/docs/react/caching/
 
 GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
 
-| Thema             | REST                                                                                                                   | GraphQL                                                                                                                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs (Caches nahe bei den Nutzenden) speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Abhilfe: **Persisted Queries** (siehe unten).                                                                      |
-| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                                                    | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                                                      |
-| **Fehler**        | Ein Statuscode pro Request.                                                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                                            |
-| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                                                   | Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen. |
-| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries (**Trusted Documents**) und begrenzt Tiefe und Kosten.                          |
-| **Betrieb**       | Endpoints, die die Teams ohnehin betreiben.                                                                            | Ein zusätzlicher Server, den ein Team betreibt, dazu Codegen und Schema-Checks im CI.                                                                                     |
+| Thema             | REST                                                                                   | GraphQL                                                                                                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Abhilfe: **Persisted Queries** (siehe unten).                                                                      |
+| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                    | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                                                      |
+| **Fehler**        | Ein Statuscode pro Request.                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                                            |
+| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                   | Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen. |
+| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries (**Trusted Documents**) und begrenzt Tiefe und Kosten.                          |
+| **Betrieb**       | Endpoints, die die Teams ohnehin betreiben.                                            | Ein zusätzlicher Server, den ein Team betreibt, dazu Codegen und Schema-Checks im CI.                                                                                     |
 
-Doku: [Best Practices](https://graphql.org/learn/best-practices/), [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
+Doku: [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
 
 <details>
 <summary>Weiterführend: Caching mit Persisted Queries</summary>
 
 Queries dürfen mit `GET` geschickt werden, und das können Caches speichern. Lange Queries passen nicht in die Längenlimits von URLs, deshalb schickt der Client statt des Query-Texts eine kurze Kennung, eine **Persisted Query**: `GET /graphql?documentId=<hash>&variables=...` (die Parameternamen unterscheiden sich je nach Tool). Der Server muss trotzdem `Cache-Control` senden, und eine Response, die öffentliche Produktdaten mit Daten der eingeloggten Person mischt, darf nicht öffentlich gecacht werden.
 
-Doku: [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/), [Relay: Persisted Queries](https://relay.dev/docs/guides/persisted-queries/)
+Doku: [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/)
 
 </details>
 
