@@ -1,6 +1,6 @@
 # Listen, Filter und Pagination
 
-> Du filterst eine Liste, öffnest einen Eintrag, drückst Zurück, und die Filter sind weg. In diesem Thema machen wir die URL zur Single Source of Truth für eine Liste: Controls schreiben die URL, eine Stelle liest sie, und die Liste rendert, was diese Stelle zurückgibt. Reload, geteilte Links und der Zurück-Button funktionieren dann ohne zusätzlichen Code. Ausserdem lassen wir die alte Liste stehen, während die nächste lädt, und sehen, warum grosse Listen mit Cursors statt Seitenzahlen paginieren.
+**Das Problem:** Du filterst eine Liste, öffnest einen Eintrag, drückst Zurück, und die Filter sind weg. Auch ein Reload oder ein geteilter Link zeigt nicht dieselbe Liste, weil der Zustand nur im Speicher liegt.
 
 **Dauer:** etwa 30 Minuten
 

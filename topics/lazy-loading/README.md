@@ -1,6 +1,6 @@
 # Ladeverhalten: Lazy Loading mit React
 
-> Deine Seite schickt alle Komponenten, Bilder und Daten-Requests auf einmal los, auch für die Teile, zu denen niemand scrollt. Wir laden diese Teile erst, wenn der Benutzer sie gleich sieht: mit dem `IntersectionObserver`, dem nativen Attribut `loading="lazy"` und Reacts `lazy`. Die Layout Shifts, die dabei entstehen, beheben wir mit Skeletons. Danach drehen wir es um und laden die nächste Seite, bevor der Benutzer klickt.
+**Das Problem:** Deine Seite lädt alle Komponenten, Bilder und Daten auf einmal, auch für die Teile, zu denen niemand scrollt. Das verlängert die Ladezeit, besonders auf langsamen Verbindungen und älteren Geräten.
 
 **Dauer:** etwa 45 Minuten
 

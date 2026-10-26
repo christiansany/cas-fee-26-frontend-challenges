@@ -1,6 +1,6 @@
 # Responsive Images: Die Umsetzung auf post.ch und css.ch
 
-> Ein 400 px breites Bild braucht auf einem Smartphone mit 3x-Display 1200 Gerätepixel, und ein falsches `srcset` schickt eine Datei in Desktop-Grösse über die Mobilverbindung. Wir schauen uns Density und Width Descriptors an, das `sizes`-Attribut und `<picture>` für Art Direction und moderne Formate wie AVIF. Danach schauen wir, wie post.ch und css.ch die `sizes` für Bilder in einem 12-Spalten-Grid berechnen. Die Berechnung übst du selbst in einer Sandbox.
+**Das Problem:** Ein 400 px breites Bild braucht auf einem Smartphone mit 3x-Display 1200 Gerätepixel, um scharf zu sein. Ein falsches `srcset` schickt dafür entweder ein unscharfes Bild oder eine Datei in Desktop-Grösse über die Mobilverbindung.
 
 **Dauer:** etwa 90 Minuten
 

@@ -1,6 +1,6 @@
 # Over- und Under-Fetching lösen mit GraphQL
 
-> Öffne auf galaxus.ch eine Produkttyp-Seite. Die Navigation, die Produktliste und jede Produktkachel stammen von verschiedenen Teams und verschiedenen Services. Mit REST hangelt sich der Browser von einer API zur nächsten und bekommt gleichzeitig zu viele und zu wenige Daten. GraphQL löst das für den Browser: Die Seite fragt in einem Request genau die Felder an, die sie anzeigt, und jede Komponente deklariert ihren eigenen Teil.
+**Das Problem:** Die Daten einer Seite kommen von mehreren Services, die verschiedenen Teams gehören. Mit REST lädt der Browser sie in mehreren Runden nacheinander, bekommt Felder, die er nie anzeigt, und muss für fehlende Daten trotzdem nachfragen. Jede Runde kostet einen Round Trip.
 
 **Dauer:** etwa 60 Minuten
 

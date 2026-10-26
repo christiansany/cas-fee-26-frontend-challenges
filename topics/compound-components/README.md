@@ -1,6 +1,6 @@
 # Compound Components mit React
 
-> Eine Komponente, die ein grosses Konfigurationsobjekt entgegennimmt, ist schwer zu lesen und schwer zu ändern. Compound Components teilen sie in Teile auf, die du in JSX zusammensetzt, wie `<select>` und `<option>` in HTML. Den State hält weiterhin die übergeordnete Komponente. Wir bauen ein Menu auf drei Arten, vergleichen sie und schauen dann ein Accordion an, das mit diesem Pattern gebaut ist.
+**Das Problem:** Eine Komponente wie ein Menu bekommt ihren ganzen Inhalt über ein grosses Konfigurationsobjekt. Jede neue Anforderung braucht eine weitere Option, und die Komponente wird schwer zu lesen und schwer zu ändern.
 
 **Dauer:** etwa 45 Minuten
 
