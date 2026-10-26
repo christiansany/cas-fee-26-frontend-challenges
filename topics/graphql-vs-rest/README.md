@@ -43,19 +43,19 @@ Unser Beispiel ist eine echte Seite: [Audio-Steckverbinder auf galaxus.ch](https
 
 Drei Teams teilen sich die Seite:
 
-- **Team A (Navigation)** gehört die Seite selbst mit Titel, Breadcrumb und Sidebar.
-- **Team B (Produktlisten)** gehört die Liste: welche Produkte zu den Filtern passen, wie viele es sind und in welcher Reihenfolge.
-- **Team C (Produkte)** gehören die Kacheln: Name, Marke, Preis, Bilder und Bewertungen eines Produkts.
+- Dem **Navigations-Team** gehört die Seite selbst mit Titel, Breadcrumb und Sidebar.
+- Dem **Produktlisten-Team** gehört die Liste: welche Produkte zu den Filtern passen, wie viele es sind und in welcher Reihenfolge.
+- Dem **Produkt-Team** gehören die Kacheln: Name, Marke, Preis, Bilder und Bewertungen eines Produkts.
 
-![Die Produkttyp-Seite von Team A, darin die Liste von Team B und darin die Kacheln von Team C](./assets/page-teams.png)
+![Die Produkttyp-Seite des Navigations-Teams, darin die Liste des Produktlisten-Teams und darin die Kacheln des Produkt-Teams](./assets/page-teams.png)
 
-Jedes Team betreibt einen eigenen Service mit eigener REST API. **Die Verschachtelung ist auch die Ladereihenfolge:** Die Seite braucht die Produktliste von Team B, und die Liste braucht die Produkte von Team C.
+Jedes Team betreibt einen eigenen Service mit eigener REST API. **Die Verschachtelung ist auch die Ladereihenfolge:** Die Seite braucht die Produktliste, und die Liste braucht die Produkte.
 
 ## Das Problem: die Seite mit REST laden
 
-### Runde 1: der Produkttyp von Team A
+### Runde 1: der Produkttyp vom Navigations-Team
 
-Die Produkttyp-ID `3137` steht in der URL. Team A liefert Titel, Breadcrumb und Sidebar:
+Die Produkttyp-ID `3137` steht in der URL. Das Navigations-Team liefert Titel, Breadcrumb und Sidebar:
 
 ```jsonc
 // GET /api/product-types/3137
@@ -76,7 +76,7 @@ Die Produkttyp-ID `3137` steht in der URL. Team A liefert Titel, Breadcrumb und 
 }
 ```
 
-### Runde 2: die Produktliste von Team B
+### Runde 2: die Produktliste vom Produktlisten-Team
 
 Die Produktliste ist nur verlinkt, der Browser muss also **auf Runde 1 warten**:
 
@@ -94,9 +94,9 @@ Die Produktliste ist nur verlinkt, der Browser muss also **auf Runde 1 warten**:
 }
 ```
 
-### Runde 3: die Produkte von Team C
+### Runde 3: die Produkte vom Produkt-Team
 
-Der Browser fragt Team C **für jedes der 48 Produkte** einzeln an:
+Der Browser fragt das Produkt-Team **für jedes der 48 Produkte** einzeln an:
 
 ```jsonc
 // GET /api/products/5862971
@@ -123,15 +123,13 @@ Drei Probleme, und die ersten beiden treten gleichzeitig auf:
 
 - **Under-Fetching.** Einer Response fehlen Daten, die die Seite braucht. Die Produktliste enthält nur Links, jede Kachel braucht einen eigenen Request.
 - **Over-Fetching.** Eine Response enthält Daten, die die Seite nicht braucht. Jedes Produkt kommt mit Beschreibung und 60 Spezifikationen, obwohl die Kachel fünf Felder zeigt.
-- **Wasserfall.** Jede Runde wartet auf die vorherige. `Promise.all` hilft nur innerhalb einer Runde. HTTP/2 und HTTP/3 ändern daran nichts: Eine Runde, die auf die Daten der vorherigen wartet, wartet trotzdem.
+- **Wasserfall.** Jede Runde wartet auf die vorherige.
 
 Jede Runde kostet mindestens einen Round Trip. Auf 4G dauert er typischerweise unter 100 ms, auf 3G 100 bis 500 ms ([High Performance Browser Networking](https://hpbn.co/mobile-networks/)). Die Zahlen in den Grafiken sind Beispielwerte.
 
 ## Die Lösung: GraphQL
 
 ### GraphQL in drei Snippets
-
-Drei Snippets von graphql.org, leicht angepasst.
 
 **Das Schema** beschreibt jeden Typ und jedes Feld, das die API anbietet, wie ein TypeScript-Interface für die ganze API. `type Query` listet die Einstiegspunkte zum Lesen, wie deine `GET`-Routen.
 
@@ -218,7 +216,7 @@ type Product {
 # Category, NavigationEntry, Brand, Money and Rating are left out
 ```
 
-**Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Service von Team B es beantwortet.
+**Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Service des Produktlisten-Teams es beantwortet.
 
 Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` ist eine **Variable**: Ihr Wert reist als JSON neben der Query mit, wie ein Routenparameter.
 
@@ -289,20 +287,20 @@ Jeder Resolver bekommt den Rückgabewert des übergeordneten Felds (`parent`), d
 ```ts
 const resolvers = {
   Query: {
-    // 👇 Team A: one call returns name, breadcrumb and navigation as well
-    productType: (_parent, args, context) => context.teamA.getProductType(args.id)
+    // 👇 navigation service: one call returns name, breadcrumb and navigation as well
+    productType: (_parent, args, context) => context.navigation.getProductType(args.id)
   },
   ProductType: {
     products: (productType, args, context) =>
-      context.teamB.getProductList({
+      context.productLists.getProductList({
         productTypeId: productType.id,
         limit: args.first
       })
   },
   ProductList: {
-    // 👇 Team B returns ids only, so fetch all 48 products from Team C in one call
+    // 👇 the list service returns ids only, so fetch all 48 products in one call
     items: (list, _args, context) =>
-      context.teamC.getProducts(list.items.map((item) => item.productId))
+      context.products.getProducts(list.items.map((item) => item.productId))
   },
   Product: {
     // a resolver that calls nothing: the schema offers one image, the service returns a list
@@ -317,7 +315,7 @@ Der Server führt die Resolver Ebene für Ebene aus: `products` wartet auf `prod
 
 ![GraphQL: ein Round Trip für den Browser, drei kurze Schritte auf dem Server](./assets/graphql-waterfall.png)
 
-Auch das Over-Fetching ist umgezogen: Team C liefert weiterhin das ganze Produkt, aber an den GraphQL-Server im selben Rechenzentrum. **Zum Smartphone reisen nur die angefragten Felder.**
+Auch das Over-Fetching ist umgezogen: Der Produkt-Service liefert weiterhin das ganze Produkt, aber an den GraphQL-Server im selben Rechenzentrum. **Zum Smartphone reisen nur die angefragten Felder.**
 
 Doku: [graphql.org: Execution](https://graphql.org/learn/execution/), [Apollo Server: Resolver](https://www.apollographql.com/docs/apollo-server/data/resolvers)
 
@@ -330,10 +328,10 @@ Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze 
 
 ```ts
 // one loader per request, so cached brands never leak between requests
-export function createBrandLoader(teamC: TeamCApi) {
+export function createBrandLoader(products: ProductsApi) {
   return new DataLoader<number, Brand>(async (ids) => {
     // 👇 one call for all ids
-    const brands = new Map((await teamC.getBrands(ids)).map((brand) => [brand.id, brand]));
+    const brands = new Map((await products.getBrands(ids)).map((brand) => [brand.id, brand]));
     return ids.map((id) => brands.get(id) ?? new Error(`No brand ${id}`));
   });
 }
@@ -351,7 +349,7 @@ Doku: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataL
 
 ### Wenn ein Service ausfällt
 
-**Fällt ein Service aus, kommt der Rest trotzdem an**, solange das betroffene Feld `null` sein darf. Bei einem Feld mit `!` wird stattdessen das nächste nullable Feld darüber `null`. Deshalb hat `items` im Schema kein `!`. Fällt Team C aus, ist `items` `null`, und `errors` sagt, wo:
+**Fällt ein Service aus, kommt der Rest trotzdem an**, solange das betroffene Feld `null` sein darf. Bei einem Feld mit `!` wird stattdessen das nächste nullable Feld darüber `null`. Deshalb hat `items` im Schema kein `!`. Fällt der Produkt-Service aus, ist `items` `null`, und `errors` sagt, wo:
 
 ```json
 {
@@ -460,7 +458,7 @@ export function ProductList(props: ProductListProps) {
 }
 ```
 
-`ProductTypePage`, die Seitenkomponente von Team A, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen:
+`ProductTypePage`, die Seitenkomponente des Navigations-Teams, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen:
 
 ```graphql
 query ProductTypePage($id: ID!) {
@@ -474,7 +472,7 @@ query ProductTypePage($id: ID!) {
 
 An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**.
 
-Fügt Team C der Kachel ein Feld hinzu, das es im Schema schon gibt, ändert das Team nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
+Fügt das Produkt-Team der Kachel ein Feld hinzu, das es im Schema schon gibt, ändert das Team nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
 
 ### Data Masking
 
@@ -523,7 +521,7 @@ GET /api/product-lists?productTypeId=3137&include=products
 JSON:API nennt das **Inclusion of Related Resources**, Stripe **Expanding** einer Response (`expand[]=...`). Das löst das Problem nur teilweise:
 
 - **Over-Fetching bleibt meist.** Ohne Sparse Fieldsets kommt jedes eingebettete Produkt mit Beschreibung und 60 Spezifikationen. JSON:API kennt dafür `fields[...]`, aber auch das muss jeder Endpoint selbst umsetzen.
-- **Die Daten müssen dort erreichbar sein.** Der Service von Team B kann Produkte nur einbetten, wenn er an die Daten von Team C herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
+- **Die Daten müssen dort erreichbar sein.** Der Produktlisten-Service kann Produkte nur einbetten, wenn er an die Daten des Produkt-Services herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
 - **Jeder Endpoint implementiert es neu**, auch für tiefere Daten wie `include=products.brand`.
 
 Aus der Praxis: Bei den Kommentaren eines Blogposts haben wir die Antworten auf jeden Kommentar per `include` mitgeladen, also eine verschachtelte Pagination in einem Request. Die Benutzerdaten zu den Kommentaren kamen aber nicht mit, dafür brauchte es einen weiteren Request pro Kommentar. Der Gewinn war bescheiden.
