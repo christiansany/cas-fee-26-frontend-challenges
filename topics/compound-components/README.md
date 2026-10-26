@@ -7,7 +7,7 @@
 ## Inhalt
 
 - [Was sind Compound Components?](#was-sind-compound-components)
-- [Das Problem](#das-problem)
+- [Das Problem im Detail](#das-problem-im-detail)
 - [Die Lösung](#die-lösung)
 - [Beispiel: Accordion](#beispiel-accordion)
 
@@ -34,7 +34,7 @@ Die beiden Elemente kommunizieren im Hintergrund miteinander. Das `<select>` hä
 <select options="name1:value1;name2:value2;name3:value3"></select>
 ```
 
-## Das Problem
+## Das Problem im Detail
 
 Angenommen, wir müssen ein Menu bauen. Das Menu hat einen Button, der es öffnet und schliesst. Es enthält Links und Buttons. Ein Klick darauf soll die gewünschte Aktion auslösen und das Menu wieder schliessen.
 

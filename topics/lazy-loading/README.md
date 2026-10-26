@@ -6,14 +6,14 @@
 
 ## Inhalt
 
-- [Das Problem](#das-problem)
+- [Das Problem im Detail](#das-problem-im-detail)
 - [Lazy Loading](#lazy-loading)
 - [Lazy Loading in React](#lazy-loading-in-react)
 - [Alles kombinieren](#alles-kombinieren)
 - [Vor dem Klick laden: Prefetching](#vor-dem-klick-laden-prefetching)
 - [Zusammenfassung](#zusammenfassung)
 
-## Das Problem
+## Das Problem im Detail
 
 Unsere Webseiten und Apps enthalten viele Komponenten. Wenn ein Benutzer unsere Seite besucht, wartet er, bis alles geladen, geparst und ausgeführt ist. Bei langsamen Verbindungen und älteren Geräten kann das lange dauern. Das schadet der Benutzererfahrung. Je länger die Ladezeit, desto höher die Absprungrate. Das senkt die Conversion-Rate und schadet auch dem SEO, weil das Suchranking die [Core Web Vitals](https://web.dev/explore/learn-core-web-vitals) berücksichtigt.
 
