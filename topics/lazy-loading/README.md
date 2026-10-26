@@ -1,6 +1,6 @@
 # Ladeverhalten: Lazy Loading mit React
 
-**Das Problem:** Deine Seite lädt alle Komponenten, Bilder und Daten auf einmal, auch für die Teile, zu denen niemand scrollt. Das verlängert die Ladezeit, besonders auf langsamen Verbindungen und älteren Geräten.
+**Das Problem:** Die Seite lädt alles auf einmal, auch die Teile, zu denen niemand scrollt.
 
 **Dauer:** etwa 45 Minuten
 

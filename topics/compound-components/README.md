@@ -1,6 +1,6 @@
 # Compound Components mit React
 
-**Das Problem:** Eine Komponente wie ein Menu bekommt ihren ganzen Inhalt über ein grosses Konfigurationsobjekt. Jede neue Anforderung braucht eine weitere Option, und die Komponente wird schwer zu lesen und schwer zu ändern.
+**Das Problem:** Ein grosses Konfigurationsobjekt macht eine Komponente schwer zu lesen und schwer zu ändern.
 
 **Dauer:** etwa 45 Minuten
 

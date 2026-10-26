@@ -1,12 +1,12 @@
 # Frontend-Challenges und mögliche Lösungen
 
-| Thema                                                                            | Dauer   | Worum es geht                                                                                                                               |
-| -------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Lazy Loading mit React](./topics/lazy-loading/README.md)                        | ~45 Min | Laden, was der Nutzer gleich sieht, Layout Shifts mit Skeletons vermeiden und vor dem Klick vorladen.                                       |
-| [Compound Components mit React](./topics/compound-components/README.md)          | ~45 Min | Ein grosses Konfigurationsobjekt in Teile aufteilen, die du in JSX zusammensetzt, wie `<select>` und `<option>`.                            |
-| [Responsive Images](./topics/responsive-images/README.md)                        | ~90 Min | Density und Width Descriptors, `sizes`, `<picture>` und moderne Formate, und `sizes` in einem Grid berechnen.                               |
-| [Over- und Under-Fetching lösen mit GraphQL](./topics/graphql-vs-rest/README.md) | ~60 Min | Eine Seite, drei Teams: warum REST zu viel und zu wenig lädt, wie eine GraphQL-Query das löst, Fragments pro Komponente und wo REST bleibt. |
-| [Listen, Filter und Pagination](./topics/lists-and-pagination/README.md)         | ~30 Min | Die URL als einzige Quelle für den Zustand, die alte Liste beim Laden sichtbar halten, und Offset- gegen Cursor-Pagination.                 |
+| Thema                                                                            | Dauer   | Das Problem                                                                                                                |
+| -------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| [Lazy Loading mit React](./topics/lazy-loading/README.md)                        | ~45 Min | Die Seite lädt alles auf einmal, auch die Teile, zu denen niemand scrollt.                                                 |
+| [Compound Components mit React](./topics/compound-components/README.md)          | ~45 Min | Ein grosses Konfigurationsobjekt macht eine Komponente schwer zu lesen und schwer zu ändern.                               |
+| [Responsive Images](./topics/responsive-images/README.md)                        | ~90 Min | Ein falsches `srcset` liefert ein unscharfes Bild oder eine Datei in Desktop-Grösse über die Mobilverbindung.              |
+| [Over- und Under-Fetching lösen mit GraphQL](./topics/graphql-vs-rest/README.md) | ~60 Min | Mit REST lädt eine Seite ihre Daten aus mehreren Services in Runden nacheinander und bekommt zu viele und zu wenige Daten. |
+| [Listen, Filter und Pagination](./topics/lists-and-pagination/README.md)         | ~30 Min | Nach einem Reload, einem geteilten Link oder Zurück sind die Filter einer Liste weg.                                       |
 
 ## Archiv
 

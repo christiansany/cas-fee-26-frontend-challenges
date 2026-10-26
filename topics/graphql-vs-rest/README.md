@@ -1,6 +1,6 @@
 # Over- und Under-Fetching lösen mit GraphQL
 
-**Das Problem:** Die Daten einer Seite kommen von mehreren Services, die verschiedenen Teams gehören. Mit REST lädt der Browser sie in mehreren Runden nacheinander, bekommt Felder, die er nie anzeigt, und muss für fehlende Daten trotzdem nachfragen. Jede Runde kostet einen Round Trip.
+**Das Problem:** Mit REST lädt eine Seite ihre Daten aus mehreren Services in Runden nacheinander und bekommt zu viele und zu wenige Daten.
 
 **Dauer:** etwa 60 Minuten
 

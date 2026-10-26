@@ -1,6 +1,6 @@
 # Responsive Images: Die Umsetzung auf post.ch und css.ch
 
-**Das Problem:** Ein 400 px breites Bild braucht auf einem Smartphone mit 3x-Display 1200 Gerätepixel, um scharf zu sein. Ein falsches `srcset` schickt dafür entweder ein unscharfes Bild oder eine Datei in Desktop-Grösse über die Mobilverbindung.
+**Das Problem:** Ein falsches `srcset` liefert ein unscharfes Bild oder eine Datei in Desktop-Grösse über die Mobilverbindung.
 
 **Dauer:** etwa 90 Minuten
 

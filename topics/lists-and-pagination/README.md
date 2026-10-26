@@ -1,6 +1,6 @@
 # Listen, Filter und Pagination
 
-**Das Problem:** Du filterst eine Liste, öffnest einen Eintrag, drückst Zurück, und die Filter sind weg. Auch ein Reload oder ein geteilter Link zeigt nicht dieselbe Liste, weil der Zustand nur im Speicher liegt.
+**Das Problem:** Nach einem Reload, einem geteilten Link oder Zurück sind die Filter einer Liste weg.
 
 **Dauer:** etwa 30 Minuten
 
