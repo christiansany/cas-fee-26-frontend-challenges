@@ -322,6 +322,8 @@ Doku: [Execution](https://graphql.org/learn/execution/)
 
 Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze Liste der IDs auf einmal bekommt. Angenommen, `brand` hätte einen eigenen Resolver. Er läuft einmal pro Produkt: 48 Requests für die Marken plus 1 für die Liste (1 + 48). Das ist das **N+1-Problem**.
 
+![Ohne DataLoader schickt der Server 1 + 48 Requests an den Produkt-Service, mit DataLoader 1 + 1](./assets/n-plus-1.png)
+
 **DataLoader** sammelt die Keys aller `load()`-Aufrufe innerhalb eines Event-Loop-Ticks und ruft eine Batch-Funktion einmal auf:
 
 ```ts
