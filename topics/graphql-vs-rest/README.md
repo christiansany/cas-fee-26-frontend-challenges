@@ -39,7 +39,7 @@ Gehören API und Frontend demselben Team, ist ein neues Feld auf einer Seite ein
 
 ## Das Beispiel: eine Seite, drei Teams
 
-Unser Beispiel ist eine echte Seite: [Audio-Steckverbinder auf galaxus.ch](https://www.galaxus.ch/en/s1/producttype/audio-connectors-3137?tagIds=591-1388). Die Teams, APIs und Responses dazu sind **erfunden**. Sie beschreiben nicht, wie Galaxus gebaut ist.
+Unser Beispiel ist eine echte Seite: [Audio-Steckverbinder auf galaxus.ch](https://www.galaxus.ch/en/s1/producttype/audio-connectors-3137). Die Teams, APIs und Responses dazu sind **erfunden**. Sie beschreiben nicht, wie Galaxus gebaut ist.
 
 Drei Teams teilen sich die Seite:
 
@@ -78,10 +78,10 @@ Die Produkttyp-ID `3137` steht in der URL. Team A liefert Titel, Breadcrumb und 
 
 ### Runde 2: die Produktliste von Team B
 
-Die Produktliste ist nur verlinkt, der Browser muss also **auf Runde 1 warten**. Den Filter ergänzt er aus der URL der Seite:
+Die Produktliste ist nur verlinkt, der Browser muss also **auf Runde 1 warten**:
 
 ```jsonc
-// GET /api/product-lists?productTypeId=3137&tagIds=591-1388&limit=48
+// GET /api/product-lists?productTypeId=3137&limit=48
 {
   "totalCount": 1211,
   "filters": [{ "id": "brand", "name": "Brand", "optionCount": 87 } /* ... */],
@@ -198,7 +198,7 @@ type ProductType {
   name: String!
   breadcrumb: [Category!]!
   navigation: [NavigationEntry!]!
-  products(tagIds: [ID!], first: Int!): ProductList!
+  products(first: Int!): ProductList!
 }
 
 type ProductList {
@@ -220,18 +220,18 @@ type Product {
 
 **Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Service von Team B es beantwortet.
 
-Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` und `$tagIds` sind **Variablen**: Ihre Werte reisen als JSON neben der Query mit, wie Routenparameter.
+Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` ist eine **Variable**: Ihr Wert reist als JSON neben der Query mit, wie ein Routenparameter.
 
 **Query**
 
 <!-- prettier-ignore -->
 ```graphql
-query ProductTypePage($id: ID!, $tagIds: [ID!]) {
+query ProductTypePage($id: ID!) {
   productType(id: $id) {
     name
     breadcrumb { name }
     navigation { name url }
-    products(tagIds: $tagIds, first: 48) {
+    products(first: 48) {
       totalCount
       items {
         name
@@ -296,7 +296,6 @@ const resolvers = {
     products: (productType, args, context) =>
       context.teamB.getProductList({
         productTypeId: productType.id,
-        tagIds: args.tagIds,
         limit: args.first
       })
   },
@@ -437,9 +436,8 @@ Was `getFragmentData` macht, erklärt der Abschnitt [Data Masking](#data-masking
 
 ```tsx
 export const ProductListFragment = graphql(`
-  # $tagIds is declared by the page query
   fragment ProductList_productType on ProductType {
-    products(tagIds: $tagIds, first: 48) {
+    products(first: 48) {
       totalCount
       items {
         id
@@ -465,7 +463,7 @@ export function ProductList(props: ProductListProps) {
 `ProductTypePage`, die Seitenkomponente von Team A, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen:
 
 ```graphql
-query ProductTypePage($id: ID!, $tagIds: [ID!]) {
+query ProductTypePage($id: ID!) {
   productType(id: $id) {
     ...ProductTypeHeader_productType
     ...CategoryNavigation_productType
@@ -474,7 +472,7 @@ query ProductTypePage($id: ID!, $tagIds: [ID!]) {
 }
 ```
 
-An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**. Variablen wie `$tagIds` deklariert die Query der Seite, die Fragments dürfen sie verwenden.
+An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**.
 
 Fügt Team C der Kachel ein Feld hinzu, das es im Schema schon gibt, ändert das Team nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
 
@@ -508,7 +506,7 @@ Doku: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architect
 
 Unser REST-Beispiel ist bewusst naiv. Ein REST-Team kann den Wasserfall stark verkürzen:
 
-- **Parallel laden.** Die Seite kennt `productTypeId` und `tagIds` aus ihrer URL. Produkttyp und Liste warten nur aufeinander, weil wir dem Link folgen.
+- **Parallel laden.** Die Seite kennt `productTypeId` aus ihrer URL. Produkttyp und Liste warten nur aufeinander, weil wir dem Link folgen.
 - **Ein Batch-Endpoint.** `GET /api/products?ids=5862971,3376520,...` statt 48 einzelner Requests.
 - **Ein Backend for Frontend (BFF).** Ein Server, der die Services im Rechenzentrum aufruft und pro Seite einen Endpoint anbietet, etwa `GET /bff/product-type-page/3137`. Dann braucht die Seite einen Round Trip, wie mit GraphQL.
 
