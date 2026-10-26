@@ -360,11 +360,11 @@ Doku: [graphql.org: Performance](https://graphql.org/learn/performance/), [DataL
 }
 ```
 
-Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**. Apollo Client verwirft `data` bei Fehlern standardmässig, mit `errorPolicy: 'all'` bleiben die Teildaten erhalten.
+Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**. Clients gehen unterschiedlich damit um: Relay gibt die Teildaten weiter und setzt das fehlerhafte Feld auf `null`, Apollo Client verwirft `data` standardmässig (mit `errorPolicy: 'all'` bleiben die Teildaten erhalten).
 
 Aus der Praxis: Der GraphQL-Server selbst steht selten im Weg, aber **die Fehlerbehandlung wird aufwändiger**. Für jede mögliche Teilantwort braucht die Seite ein sinnvolles Verhalten.
 
-Doku: [Response](https://graphql.org/learn/response/), [Spec: Handling Execution Errors](https://spec.graphql.org/September2025/#sec-Handling-Execution-Errors), [Apollo Client: Error Handling](https://www.apollographql.com/docs/react/data/error-handling)
+Doku: [Response](https://graphql.org/learn/response/), [Spec: Handling Execution Errors](https://spec.graphql.org/September2025/#sec-Handling-Execution-Errors), [Relay: Field Errors](https://relay.dev/docs/guides/catch-directive/), [Apollo Client: Error Handling](https://www.apollographql.com/docs/react/data/error-handling)
 
 ## Fragments: jede Komponente deklariert ihre Daten
 
@@ -383,34 +383,36 @@ Das Fragment der Kachel listet ihre fünf Felder:
 
 ![Die Produktkachel und die Felder ihres Fragments](./assets/product-tile-fragment.png)
 
-Queries und Fragments sind gewöhnliche Strings, deshalb **kann TypeScript sie nicht prüfen**. Ein Codegenerator wie GraphQL Codegen liest sie zusammen mit dem Schema und schreibt für jede einen Typ, so wie OpenAPI-Codegen das für REST tut. Du packst jeden String in die generierte Funktion `graphql(...)`, um diesen Typ zu bekommen.
+_Die Frontend-Beispiele auf dieser Seite nutzen den GraphQL-Client [Relay](https://relay.dev)._
+
+Queries und Fragments stehen in `graphql`-Tags. Ein Compiler liest sie zusammen mit dem Schema und erzeugt für jede einen TypeScript-Typ, so wie OpenAPI-Codegen das für REST tut. `useFragment` liest die Felder des Fragments aus den Daten, die die Komponente bekommt:
 
 ```tsx
-import { graphql, type FragmentType, getFragmentData } from "./gql";
+import { graphql, useFragment } from "react-relay";
+import type { ProductTile_product$key } from "./__generated__/ProductTile_product.graphql";
 
-export const ProductTileFragment = graphql(`
-  fragment ProductTile_product on Product {
-    imageUrl
-    price {
-      amount
-      currency
-    }
-    brand {
-      name
-    }
-    name
-    rating {
-      average
-      count
-    }
-  }
-`);
-
-type ProductTileProps = { product: FragmentType<typeof ProductTileFragment> };
-
-export function ProductTile(props: ProductTileProps) {
+export function ProductTile(props: { product: ProductTile_product$key }) {
   // 👇 unmask: only the fields of ProductTile_product
-  const product = getFragmentData(ProductTileFragment, props.product);
+  const product = useFragment(
+    graphql`
+      fragment ProductTile_product on Product {
+        imageUrl
+        price {
+          amount
+          currency
+        }
+        brand {
+          name
+        }
+        name
+        rating {
+          average
+          count
+        }
+      }
+    `,
+    props.product
+  );
   return (
     <article>
       <img src={product.imageUrl} alt="" />
@@ -426,27 +428,26 @@ export function ProductTile(props: ProductTileProps) {
 }
 ```
 
-Was `getFragmentData` macht, erklärt der Abschnitt [Data Masking](#data-masking). Im Codegen-Standard heisst sie `useFragment` (siehe Detail unten).
-
 ### Die Query der Seite zusammensetzen
 
 `ProductList` fragt die Anzahl an und setzt das Fragment der Kachel in jedes Item ein:
 
 ```tsx
-export const ProductListFragment = graphql(`
-  fragment ProductList_productType on ProductType {
-    products(first: 48) {
-      totalCount
-      items {
-        id
-        ...ProductTile_product
+export function ProductList(props: { productType: ProductList_productType$key }) {
+  const productType = useFragment(
+    graphql`
+      fragment ProductList_productType on ProductType {
+        products(first: 48) {
+          totalCount
+          items {
+            id
+            ...ProductTile_product
+          }
+        }
       }
-    }
-  }
-`);
-
-export function ProductList(props: ProductListProps) {
-  const productType = getFragmentData(ProductListFragment, props.productType);
+    `,
+    props.productType
+  );
   return (
     <>
       <h2>{productType.products.totalCount} products</h2>
@@ -458,15 +459,30 @@ export function ProductList(props: ProductListProps) {
 }
 ```
 
-`ProductTypePage`, die Seitenkomponente des Navigations-Teams, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen:
+`ProductTypePage`, die Seitenkomponente des Navigations-Teams, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen und lädt die Daten mit `useLazyLoadQuery`:
 
-```graphql
-query ProductTypePage($id: ID!) {
-  productType(id: $id) {
-    ...ProductTypeHeader_productType
-    ...CategoryNavigation_productType
-    ...ProductList_productType
-  }
+```tsx
+export function ProductTypePage(props: { id: string }) {
+  const data = useLazyLoadQuery<ProductTypePageQuery>(
+    graphql`
+      query ProductTypePageQuery($id: ID!) {
+        productType(id: $id) {
+          ...ProductTypeHeader_productType
+          ...CategoryNavigation_productType
+          ...ProductList_productType
+        }
+      }
+    `,
+    { id: props.id }
+  );
+  if (!data.productType) return null;
+  return (
+    <>
+      <ProductTypeHeader productType={data.productType} />
+      <CategoryNavigation productType={data.productType} />
+      <ProductList productType={data.productType} />
+    </>
+  );
 }
 ```
 
@@ -476,27 +492,16 @@ Fügt das Produkt-Team der Kachel ein Feld hinzu, das es im Schema schon gibt, �
 
 ### Data Masking
 
-**Data Masking** versteckt die Felder anderer Teams. `props.product` kommt maskiert an: Sein Typ zeigt kein Feld, bis die Komponente es mit ihrem eigenen Fragment und `getFragmentData` demaskiert. In `ProductList` heisst das:
+**Data Masking** versteckt die Felder anderer Teams. `props.product` kommt maskiert an: Erst `useFragment` mit dem eigenen Fragment gibt die Felder frei. In `ProductList` heisst das:
 
 ```tsx
 item.id; // fine: ProductList asked for it
-item.price; // TypeScript error: only ProductTile asked for it
+item.price; // TypeScript error, and undefined at runtime: only ProductTile asked for it
 ```
 
-**Entfernst du ein Feld aus deinem Fragment, kann nur deine eigene Komponente kaputtgehen** (zumindest bei den Typen).
+**Entfernst du ein Feld aus deinem Fragment, kann nur deine eigene Komponente kaputtgehen.**
 
-Doku: [graphql.org: Fragments](https://graphql.org/learn/queries/#fragments), [The Guild: Fragments mit GraphQL Codegen](https://the-guild.dev/blog/unleash-the-power-of-fragments-with-graphql-codegen), [Codegen Client Preset](https://the-guild.dev/graphql/codegen/plugins/presets/preset-client)
-
-<details>
-<summary>Weiterführend: Relay und die Codegen-Einstellungen</summary>
-
-**Relay**, der GraphQL-Client von Meta für React, hat dieses Modell eingeführt. Sein Compiler generiert die Typen und maskiert die Daten auch zur Laufzeit, nicht nur in TypeScript. Die ESLint-Regel `relay/unused-fields` meldet Felder, die eine Komponente anfragt, aber nie liest.
-
-Im Client Preset von GraphQL Codegen heisst `getFragmentData` standardmässig `useFragment`, obwohl die Funktion kein React Hook ist. Die Option `fragmentMasking: { unmaskFunctionName: 'getFragmentData' }` benennt sie um.
-
-Doku: [Relay: Thinking in Relay](https://relay.dev/docs/principles-and-architecture/thinking-in-relay/), [Relay: Fragments](https://relay.dev/docs/guided-tour/rendering/fragments/), [eslint-plugin-relay](https://github.com/relayjs/eslint-plugin-relay)
-
-</details>
+Doku: [graphql.org: Fragments](https://graphql.org/learn/queries/#fragments), [Relay: useFragment](https://relay.dev/docs/api-reference/use-fragment/), [Relay: useLazyLoadQuery](https://relay.dev/docs/api-reference/use-lazy-load-query/)
 
 ## Geht das nicht auch mit REST?
 
@@ -563,12 +568,14 @@ Doku: [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/), [
 
 ## GraphQL und REST in einer grossen Firma
 
-Ein grosser Shop nutzt **beides**. Im Hintergrund betreibt jedes Team eigene Services mit eigener Datenbank, untereinander meist mit REST APIs verbunden. Davor sitzen zwei Arten von Einstiegspunkten:
+Ein grosser Shop nutzt **beides**. Im Hintergrund betreibt jedes Team eigene Services mit eigener Datenbank. Davor sitzen zwei Arten von Einstiegspunkten:
 
-![Ein GraphQL-Layer für die Daten der Seiten, REST-Endpoints für alles andere, dahinter die Services der Teams](./assets/large-company.png)
+![Ein GraphQL-Server für die Daten der Seiten, REST-Endpoints für alles andere, dahinter die Services der Teams, die GraphQL oder REST sprechen](./assets/large-company.png)
 
 - **Ein GraphQL-Server** für die Seiten des Webshops und der Mobile App. Beide Clients fragen dasselbe Schema nach genau dem, was jeder Screen braucht.
 - **REST-Endpoints** für alles, was gewöhnliches HTTP ist oder mit der Aussenwelt spricht: Login mit seinen Redirects, Datei-Uploads, Webhooks eines Payment-Providers und eine öffentliche API für Partnershops, die stabile URLs und eine Dokumentation in OpenAPI erwarten.
+
+Hinter dem GraphQL-Server müssen keine REST-Services stehen. **Bieten die Services selbst GraphQL an**, fragt der Server auch dort nur die Felder an, die er braucht. Sprechen sie REST, gibt es Over- und Under-Fetching weiterhin, nur im internen Netz.
 
 GitHub zum Beispiel bietet seine öffentliche API als REST und als GraphQL an und [vergleicht beide in der Doku](https://docs.github.com/en/rest/about-the-rest-api/comparing-githubs-rest-api-and-graphql-api).
 
