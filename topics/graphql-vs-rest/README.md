@@ -125,7 +125,7 @@ Drei Probleme, und die ersten beiden treten gleichzeitig auf:
 - **Over-Fetching.** Eine Response enthält Daten, die die Seite nicht braucht. Jedes Produkt kommt mit Beschreibung und 60 Spezifikationen, obwohl die Kachel fünf Felder zeigt.
 - **Wasserfall.** Jede Runde wartet auf die vorherige.
 
-Jede Runde kostet mindestens einen Round Trip, im Mobilnetz bis zu mehreren hundert Millisekunden ([Quelle](https://hpbn.co/mobile-networks/)). Die Zahlen in den Grafiken sind Beispielwerte.
+Jede Runde kostet mindestens einen Round Trip. Die Zweite Runde kann erst gestartet werden, wenn die 1. Runde fertig ist.
 
 ## Die Lösung: GraphQL
 
@@ -169,15 +169,7 @@ type Project {
 }
 ```
 
-**Der Client bestimmt, welche Felder zurückkommen.** Die Begriffe, übersetzt in REST:
-
-| GraphQL                 | In REST hiesse das                  |
-| ----------------------- | ----------------------------------- |
-| **Schema**              | Ein OpenAPI-Dokument                |
-| **Typ**, etwa `Project` | Die Form eines JSON-Bodys           |
-| **Feld auf `Query`**    | Ein Endpoint, `GET /projects/:name` |
-| **Query**               | Ein `GET`-Request                   |
-| **Resolver**            | Ein Route Handler                   |
+**Der Client bestimmt, welche Felder zurückkommen.**
 
 Schreibzugriffe heissen **Mutation** (wie `POST`, `PUT`, `DELETE`). Alles geht **an dieselbe URL**, meist `POST /graphql`.
 
@@ -196,7 +188,7 @@ type ProductType {
   name: String!
   breadcrumb: [Category!]!
   navigation: [NavigationEntry!]!
-  products(first: Int!): ProductList!
+  products(first: Int!, after: String): ProductList!
 }
 
 type ProductList {
@@ -280,34 +272,73 @@ Der GraphQL-Server trägt die Daten aus den drei Services mit **Resolvern** zusa
 
 ![Die Query der Seite: Vier Felder haben einen eigenen Resolver, der Rest kommt mit dem parent-Objekt](./assets/resolvers.png)
 
-Ein Resolver bekommt drei Dinge: `parent` (den Wert des übergeordneten Felds), `args` (die Argumente) und `context` (die API-Clients):
+Unsere Resolver rufen die REST APIs der Services direkt mit `fetch` auf. Die Services antworten mit denselben JSON-Formen wie in den REST-Runden oben, hier gekürzt als Typen:
+
+```ts
+// GET http://navigation/api/product-types/:id
+type ProductTypeResponse = {
+  id: number;
+  name: string;
+  breadcrumb: { name: string; href: string }[];
+  navigation: { name: string; url: string }[];
+};
+
+// GET http://product-lists/api/product-lists?productTypeId=…&limit=…
+type ProductListResponse = {
+  totalCount: number;
+  items: { productId: number; href: string }[];
+};
+
+// GET http://products/api/products?ids=…
+type ProductResponse = {
+  id: number;
+  name: string;
+  brand: { id: number; name: string };
+  price: { amount: number; currency: string };
+  images: string[];
+  rating: { average: number; count: number } | null;
+};
+```
+
+Ein Resolver bekommt `parent` (den Rückgabewert des übergeordneten Resolvers) und `args` (die Argumente des Felds). Was ein Resolver zurückgibt, ist das `parent` der Felder darunter:
 
 ```ts
 const resolvers = {
   Query: {
-    // 👇 navigation service: one call returns name, breadcrumb and navigation as well
-    productType: (_parent, args, context) => context.navigation.getProductType(args.id)
+    // 👇 one call returns name, breadcrumb and navigation as well
+    productType: async (_parent, args: { id: string }): Promise<ProductTypeResponse> => {
+      const res = await fetch(`http://navigation/api/product-types/${args.id}`);
+      return res.json();
+    }
   },
   ProductType: {
-    products: (productType, args, context) =>
-      context.productLists.getProductList({
-        productTypeId: productType.id,
-        limit: args.first
-      })
+    // 👇 parent is the ProductTypeResponse from above
+    products: async (
+      productType: ProductTypeResponse,
+      args: { first: number }
+    ): Promise<ProductListResponse> => {
+      const res = await fetch(
+        `http://product-lists/api/product-lists?productTypeId=${productType.id}&limit=${args.first}`
+      );
+      return res.json();
+    }
   },
   ProductList: {
-    // 👇 the list service returns ids only, so fetch all 48 products in one call
-    items: (list, _args, context) =>
-      context.products.getProducts(list.items.map((item) => item.productId))
+    // 👇 the list holds ids only, so fetch all 48 products in one call
+    items: async (list: ProductListResponse): Promise<ProductResponse[]> => {
+      const ids = list.items.map((item) => item.productId).join(",");
+      const res = await fetch(`http://products/api/products?ids=${ids}`);
+      return res.json();
+    }
   },
   Product: {
-    // a resolver that calls nothing: the schema offers one image, the service returns a list
-    imageUrl: (product) => product.images[0]
+    // a resolver without a call: the schema offers one image, the service returns a list
+    imageUrl: (product: ProductResponse) => product.images[0]
   }
 };
 ```
 
-So ist `getProductType` **ein Aufruf, nicht einer pro Feld**.
+So lädt der Produkttyp mit **einem Aufruf, nicht einem pro Feld**.
 
 Der Server führt die Resolver Ebene für Ebene aus: `products` wartet auf `productType`, und `items` wartet auf `products`. **Der Wasserfall ist noch da, aber er läuft im Rechenzentrum**, wo ein Aufruf wenige Millisekunden dauert. Der Browser wartet nur noch auf einen Round Trip:
 
@@ -328,15 +359,16 @@ Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze 
 
 ```ts
 // one loader per request, so cached brands never leak between requests
-export function createBrandLoader(products: ProductsApi) {
+export function createBrandLoader() {
   return new DataLoader<number, Brand>(async (ids) => {
     // 👇 one call for all ids
-    const brands = new Map((await products.getBrands(ids)).map((brand) => [brand.id, brand]));
+    const res = await fetch(`http://products/api/brands?ids=${ids.join(",")}`);
+    const brands = new Map((await res.json()).map((brand) => [brand.id, brand]));
     return ids.map((id) => brands.get(id) ?? new Error(`No brand ${id}`));
   });
 }
 
-// resolver for Product.brand, with the loader in the context
+// resolver for Product.brand: the loader is created per request and passed in the context
 const brand = (product: Product, _args: unknown, context: Context) =>
   context.brandLoader.load(product.brandId);
 ```
