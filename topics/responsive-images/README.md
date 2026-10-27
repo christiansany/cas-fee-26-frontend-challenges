@@ -421,7 +421,6 @@ const sizes = mapImageSizesToColumns([
 **Demo** 🤯
 
 - [🌟 React-Demo](https://codesandbox.io/p/sandbox/n8mczn?file=%2Fsrc%2FApp.tsx)
-- [Playground-Demo](https://codesandbox.io/s/o04l7)
 - [Live-Demo post.ch](https://www.post.ch)
 - [Live-Demo css.ch](https://www.css.ch)
 
