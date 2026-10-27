@@ -613,7 +613,7 @@ GET /api/product-lists?productTypeId=3137&include=products
 
 JSON:API nennt das **Inclusion of Related Resources**, Stripe **Expanding** einer Response (`expand[]=...`). Das löst das Problem nur teilweise:
 
-- **Over-Fetching bleibt meist.** Ohne Sparse Fieldsets kommt jedes eingebettete Produkt mit Beschreibung und 60 Spezifikationen. JSON:API kennt dafür `fields[...]`, aber auch das muss jeder Endpoint selbst umsetzen.
+- **Over-Fetching bleibt.** Jedes eingebettete Produkt kommt mit Beschreibung und 60 Spezifikationen.
 - **Die Daten müssen dort erreichbar sein.** Der Produktlisten-Service kann Produkte nur einbetten, wenn er an die Daten des Produkt-Services herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
 - **Jeder Endpoint implementiert es neu**, auch für tiefere Daten wie `include=products.brand`.
 
