@@ -193,7 +193,7 @@ function Example() {
 }
 ```
 
-Das liest sich deutlich besser.
+Das liest sich deutlich besser. 😍
 
 #### Vorteile
 

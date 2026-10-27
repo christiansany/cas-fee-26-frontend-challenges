@@ -27,21 +27,6 @@ Lazy Loading ist eine Technik, bei der Ressourcen wie Bilder oder JavaScript ers
 
 ![Ladelösung](./assets/loading-solution.png)
 
-### Natives Lazy Loading für Bilder und iframes
-
-Für Bilder und iframes brauchst du kein JavaScript. Mit `loading="lazy"` schiebt der Browser den Request auf, bis das Element einen bestimmten Abstand zum Viewport erreicht. Alle aktuellen Browser unterstützen das für beide Elemente.
-
-```html
-<img src="item-photo.jpg" alt="Camera" width="800" height="600" loading="lazy" />
-<iframe src="https://example.com/map" title="Pick-up location" loading="lazy"></iframe>
-```
-
-Setze `width` und `height`, damit der Browser den Platz reservieren kann, bevor das Bild da ist. Lade die Bilder, die beim ersten Laden sichtbar sind, nie lazy, vor allem nicht das grösste: Das verzögert deinen Largest Contentful Paint (LCP). Für dieses Bild sagt `fetchpriority="high"` dem Browser, dass er es vor anderen Bildern laden soll.
-
-Doku: [MDN: Lazy loading](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority)
-
-Für alles andere (JavaScript-Module, Daten, Komponenten) musst du selbst wissen, wann ein Element in den Viewport kommt. Dafür gibt es den `IntersectionObserver`.
-
 ### IntersectionObserver
 
 Der `IntersectionObserver` ist eine JavaScript-API, mit der du überwachst, wann ein HTML-Element in den Viewport eintritt oder ihn verlässt. Genau in diesem Moment kannst du Aktionen auslösen.
@@ -194,7 +179,7 @@ Mit dem `IntersectionObserver` kannst du jetzt Lazy Loading umsetzen. Du lädst 
 
 In React lädst du mit `lazy` den Code einer Komponente erst, wenn sie zum ersten Mal gerendert wird. Anstatt die Komponente direkt mit `import LazyComponent from './LazyComponent.tsx'` zu importieren, erstellst du mit `lazy` eine neue Komponente, die einen dynamischen Import von `LazyComponent` ausführt.
 
-Dabei gelten drei Regeln. Das Modul muss die Komponente als `default`-Export exportieren. Deklariere die Lazy-Komponente auf oberster Ebene des Moduls, nie innerhalb einer anderen Komponente, sonst wird ihr State bei jedem Render zurückgesetzt. Und während der Code lädt, suspendiert die Komponente (React pausiert ihr Rendering). Pack sie deshalb in eine `<Suspense>`-Boundary mit Fallback.
+Solange der Code lädt, zeigt die umschliessende `<Suspense>`-Boundary ihren Fallback.
 
 ```tsx
 import { lazy, Suspense, type FunctionComponent } from "react";
@@ -217,7 +202,7 @@ export default App;
 
 Doku: [react.dev: lazy](https://react.dev/reference/react/lazy), [react.dev: Suspense](https://react.dev/reference/react/Suspense)
 
-Anstatt in React direkt mit dem `IntersectionObserver` zu arbeiten, kannst du das [`react-intersection-observer`-Package](https://www.npmjs.com/package/react-intersection-observer) nutzen. Es wird aktiv gepflegt und unterstützt React 19. Es nutzt den `IntersectionObserver` unter der Haube und stellt dir einen Hook zur Verfügung, der dir sagt, ob ein Element im Viewport ist.
+Anstatt in React direkt mit dem `IntersectionObserver` zu arbeiten, kannst du das [`react-intersection-observer`-Package](https://www.npmjs.com/package/react-intersection-observer) nutzen. Es nutzt den `IntersectionObserver` unter der Haube und stellt dir einen Hook zur Verfügung, der dir sagt, ob ein Element im Viewport ist.
 
 ```tsx
 import { lazy, Suspense, type FunctionComponent } from "react";
@@ -253,6 +238,8 @@ const App: FunctionComponent = () => {
 export default App;
 ```
 
+Die Demos auf dieser Seite nutzen `lazy` nicht. Sie laden **Daten** erst, wenn ein Element in den Viewport kommt, nicht den Code von Komponenten. Das Prinzip bleibt dasselbe: `useInView` entscheidet, wann geladen wird.
+
 **Demo** 🤯
 
 - [React Lazy with IntersectionObserver (Sandbox)](https://codesandbox.io/s/dvjl33?file=/src/App.tsx)
@@ -282,6 +269,8 @@ Die Lösung ist, den Platz für den Inhalt von Anfang an zu reservieren. Eine M�
 ## Alles kombinieren
 
 Kombiniert ergibt das eine Lösung, die performant ist und dem Benutzer eine gute Erfahrung bietet.
+
+🎉🎉🎉
 
 - [Pokémon-Liste mit Skeletons (Sandbox)](https://codesandbox.io/s/58tdkj?file=/src/Pokemon.tsx)
 - [Pokémon-Liste mit Skeletons (Resultat)](https://58tdkj.csb.app/)

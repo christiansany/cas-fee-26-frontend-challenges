@@ -4,7 +4,7 @@
   Dauer: etwa 45 Minuten
 - **[Compound Components mit React](./topics/compound-components/README.md)**: Ein grosses Konfigurationsobjekt macht eine Komponente schwer zu lesen und schwer zu ändern.\
   Dauer: etwa 45 Minuten
-- **[Responsive Images](./topics/responsive-images/README.md)**: Ein falsches `srcset` liefert ein unscharfes Bild oder eine Datei in Desktop-Grösse über die Mobilverbindung.\
+- **[Responsive Images](./topics/responsive-images/README.md)**: Ein einziges Bild für alle Geräte reicht nicht: Auf dem einen ist es verpixelt, auf dem anderen lädt es eine viel zu grosse Datei.\
   Dauer: etwa 90 Minuten
 - **[Over- und Under-Fetching lösen mit GraphQL](./topics/graphql-vs-rest/README.md)**: Mit REST lädt eine Seite ihre Daten aus mehreren Services in Runden nacheinander und bekommt zu viele und zu wenige Daten.\
   Dauer: etwa 60 Minuten

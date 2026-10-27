@@ -1,6 +1,6 @@
 # Responsive Images: Die Umsetzung auf post.ch und css.ch
 
-**Das Problem:** Ein falsches `srcset` liefert ein unscharfes Bild oder eine Datei in Desktop-Grösse über die Mobilverbindung.
+**Das Problem:** Ein einziges Bild für alle Geräte reicht nicht: Auf dem einen ist es verpixelt, auf dem anderen lädt es eine viel zu grosse Datei.
 
 **Dauer:** etwa 90 Minuten
 
@@ -114,7 +114,7 @@ Diese Methode ist vor allem dann sinnvoll, wenn sich die Breite eines Bildes mit
 />
 ```
 
-Diese Information allein nützt dem Browser wenig, da er noch nicht weiss, wie breit das Bild angezeigt wird. Weil sich die Anzeigebreite mit der Breite des Viewports ändert, taugt auch ein festes `width`-Attribut nicht als Angabe der Anzeigebreite. `width` und `height` setzen wir trotzdem (siehe "Laden und Priorität"): Sie liefern dem Browser das Seitenverhältnis.
+Diese Information allein nützt dem Browser wenig, da er noch nicht weiss, wie breit das Bild angezeigt wird. Weil sich die Anzeigebreite mit der Breite des Viewports ändert, taugt auch ein festes `width`-Attribut nicht als Angabe der Anzeigebreite.
 
 #### Das `sizes`-Attribut
 
@@ -124,13 +124,11 @@ Das `sizes`-Attribut teilt dem Browser mit, wie breit ein Bild effektiv dargeste
 
 **Bedingung für die Bildgrösse**
 
-Als Breite sind alle CSS-Längen erlaubt, typischerweise:
+Als Breite ist jede CSS-Länge erlaubt, aber kein Prozentwert. Typisch sind:
 
 - In `vw`
 - In `px` (oder `em`, `rem` usw.; relative Einheiten beziehen sich auf das Root-Element)
 - Als Kombination davon in einem `calc()`
-
-Prozentwerte sind nicht erlaubt.
 
 **Beispiel**
 
@@ -231,29 +229,6 @@ Doku: [MDN: Image file type and format guide](https://developer.mozilla.org/en-U
 
 - [AVIF has landed](https://jakearchibald.com/2020/avif-has-landed/)
 - [Using WebP Images](https://css-tricks.com/using-webp-images/)
-
-### Laden und Priorität
-
-Die richtige Datei ist erst die halbe Arbeit. Der Browser muss auch wissen, wann er sie laden soll.
-
-- **Platz reservieren.** Setze `width` und `height` auf die intrinsische Grösse des Bildes. Der Browser leitet daraus das Seitenverhältnis ab und reserviert den Platz, bevor die Datei ankommt, damit die Seite nicht verspringt.
-- **Was unterhalb des Folds liegt, lazy laden.** `loading="lazy"` verzögert den Download, bis das Bild in die Nähe des Viewports kommt. Alle aktuellen Browser unterstützen das.
-- **Das grösste Bild beim ersten Laden nie lazy laden.** Dieses Bild ist oft dein Largest Contentful Paint (LCP). Lass es eager und ergänze `fetchpriority="high"`, damit der Browser es vor anderen Bildern holt.
-- **Lazy Images vom Browser messen lassen.** Bei Lazy Images kannst du `sizes` mit `auto` beginnen: Der Browser nimmt dann die tatsächliche Layout-Breite des Bildes. Chrome, Edge und Firefox unterstützen das, Safari noch nicht zuverlässig. Lass deshalb deine berechneten `sizes` als Fallback nach `auto` stehen.
-
-```html
-<img
-  src="cat-400px.jpg"
-  alt=""
-  width="800"
-  height="600"
-  loading="lazy"
-  srcset="cat-400px.jpg 400w, cat-800px.jpg 800w, cat-1600px.jpg 1600w"
-  sizes="auto, (min-width: 800px) 50vw, 100vw"
-/>
-```
-
-Doku: [MDN: `<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img), [web.dev: Browser-level image lazy loading](https://web.dev/articles/browser-level-image-lazy-loading), [web.dev: Fetch Priority](https://web.dev/articles/fetch-priority), [web.dev: Optimize Largest Contentful Paint](https://web.dev/articles/optimize-lcp)
 
 ### Übung 🔥
 
