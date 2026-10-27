@@ -201,7 +201,7 @@ Vergleiche Strings, keine Objekte: React prüft, ob sich der Wert geändert hat,
 ```tsx
 const serialize = createSerializer(listParsers);
 
-export function ItemsPage() {
+export const ItemsPage: FunctionComponent = () => {
   const [params] = useQueryStates(listParsers);
   // 👇 a string: equal URLs give equal values
   const search = serialize(params); // "?category=tools&page=2"
@@ -215,7 +215,7 @@ export function ItemsPage() {
       </Suspense>
     </div>
   );
-}
+};
 ```
 
 Der Fallback erscheint nur beim ersten Laden, wenn es noch keine alte Liste gibt.
@@ -284,7 +284,7 @@ Der Browser stellt die Scroll-Position bei Zurück selbst wieder her. Das klappt
 const PAGE_SIZE = 24;
 const MAX_COUNT = 480;
 
-export function ItemFeed() {
+export const ItemFeed: FunctionComponent = () => {
   const [count, setCount] = useQueryState("count", parseAsInteger.withDefault(PAGE_SIZE));
   // 👇 a hand-edited ?count=100000 must not reach the API
   const shown = Math.min(Math.max(count, PAGE_SIZE), MAX_COUNT);
@@ -298,7 +298,7 @@ export function ItemFeed() {
       )}
     </>
   );
-}
+};
 ```
 
 Jeder Klick lädt die ganze sichtbare Liste neu: 48 Einträge, dann 72. Das ist der Preis für eine einzige Regel, "die URL sagt, wie viele, die Liste zeigt so viele", und die Obergrenze hält ihn klein.

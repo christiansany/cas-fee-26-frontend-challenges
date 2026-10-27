@@ -125,7 +125,7 @@ Drei Probleme, und die ersten beiden treten gleichzeitig auf:
 - **Over-Fetching.** Eine Response enthält Daten, die die Seite nicht braucht. Jedes Produkt kommt mit Beschreibung und 60 Spezifikationen, obwohl die Kachel fünf Felder zeigt.
 - **Wasserfall.** Jede Runde wartet auf die vorherige.
 
-Jede Runde kostet mindestens einen Round Trip. Die Zweite Runde kann erst gestartet werden, wenn die 1. Runde fertig ist.
+Jede Runde kostet mindestens einen Round Trip. Die zweite Runde kann erst gestartet werden, wenn die 1. Runde fertig ist.
 
 ## Die Lösung: GraphQL
 
@@ -185,6 +185,7 @@ type Query {
 }
 
 type ProductType {
+  id: ID!
   name: String!
   breadcrumb: [Category!]!
   navigation: [NavigationEntry!]!
@@ -306,7 +307,7 @@ Ein Resolver bekommt `parent` (den Rückgabewert des übergeordneten Resolvers) 
 const resolvers = {
   Query: {
     // 👇 one call returns name, breadcrumb and navigation as well
-    productType: async (_parent, args: { id: string }): Promise<ProductTypeResponse> => {
+    productType: async (parent, args: { id: string }): Promise<ProductTypeResponse> => {
       const res = await fetch(`http://navigation/api/product-types/${args.id}`);
       return res.json();
     }
@@ -314,26 +315,26 @@ const resolvers = {
   ProductType: {
     // 👇 parent is the ProductTypeResponse from above
     products: async (
-      productType: ProductTypeResponse,
+      parent: ProductTypeResponse,
       args: { first: number }
     ): Promise<ProductListResponse> => {
       const res = await fetch(
-        `http://product-lists/api/product-lists?productTypeId=${productType.id}&limit=${args.first}`
+        `http://product-lists/api/product-lists?productTypeId=${parent.id}&limit=${args.first}`
       );
       return res.json();
     }
   },
   ProductList: {
     // 👇 the list holds ids only, so fetch all 48 products in one call
-    items: async (list: ProductListResponse): Promise<ProductResponse[]> => {
-      const ids = list.items.map((item) => item.productId).join(",");
+    items: async (parent: ProductListResponse): Promise<ProductResponse[]> => {
+      const ids = parent.items.map((item) => item.productId).join(",");
       const res = await fetch(`http://products/api/products?ids=${ids}`);
       return res.json();
     }
   },
   Product: {
     // a resolver without a call: the schema offers one image, the service returns a list
-    imageUrl: (product: ProductResponse) => product.images[0]
+    imageUrl: (parent: ProductResponse) => parent.images[0]
   }
 };
 ```
@@ -355,27 +356,44 @@ Unser `items`-Resolver holt alle 48 Produkte in einem Aufruf, weil er die ganze 
 
 ![Ohne DataLoader schickt der Server 1 + 48 Requests an den Produkt-Service, mit DataLoader 1 + 1](./assets/n-plus-1.png)
 
-**DataLoader** sammelt die Keys aller `load()`-Aufrufe innerhalb eines Event-Loop-Ticks und ruft eine Batch-Funktion einmal auf:
+**DataLoader** sammelt die Keys aller `load()`-Aufrufe innerhalb eines Event-Loop-Ticks und ruft eine Batch-Funktion einmal auf. Der Loader entsteht pro Request im `context`, dem dritten Argument jedes Resolvers:
 
 ```ts
-// one loader per request, so cached brands never leak between requests
-export function createBrandLoader() {
+import DataLoader from "dataloader";
+import { createSchema, createYoga } from "graphql-yoga";
+
+type Brand = { id: number; name: string };
+type Context = { brandLoader: DataLoader<number, Brand> };
+
+function createBrandLoader() {
   return new DataLoader<number, Brand>(async (ids) => {
     // 👇 one call for all ids
     const res = await fetch(`http://products/api/brands?ids=${ids.join(",")}`);
-    const brands = new Map((await res.json()).map((brand) => [brand.id, brand]));
-    return ids.map((id) => brands.get(id) ?? new Error(`No brand ${id}`));
+    const brands: Brand[] = await res.json();
+    const byId = new Map(brands.map((brand) => [brand.id, brand]));
+    return ids.map((id) => byId.get(id) ?? new Error(`No brand ${id}`));
   });
 }
 
-// resolver for Product.brand: the loader is created per request and passed in the context
-const brand = (product: Product, _args: unknown, context: Context) =>
-  context.brandLoader.load(product.brandId);
+const resolvers = {
+  // ... Query, ProductType, ProductList as above
+  Product: {
+    // 👇 runs 48 times, but the 48 load() calls become one request
+    brand: (parent: { brandId: number }, _args: unknown, context: Context) =>
+      context.brandLoader.load(parent.brandId)
+  }
+};
+
+const yoga = createYoga({
+  schema: createSchema({ typeDefs, resolvers }),
+  // 👇 a new loader for every request, so cached brands never leak between requests
+  context: (): Context => ({ brandLoader: createBrandLoader() })
+});
 ```
 
 Die Batch-Funktion muss pro Key ein Ergebnis zurückgeben, in derselben Reihenfolge wie die Keys.
 
-Doku: [DataLoader](https://github.com/graphql/dataloader)
+Doku: [DataLoader](https://github.com/graphql/dataloader), [GraphQL Yoga: Context](https://the-guild.dev/graphql/yoga-server/docs/features/context)
 
 </details>
 
@@ -386,21 +404,34 @@ Doku: [DataLoader](https://github.com/graphql/dataloader)
 ```json
 {
   "data": {
-    "productType": { "name": "Audio connectors", "products": { "totalCount": 1211, "items": null } }
+    "productType": {
+      "name": "Audio connectors",
+      "products": {
+        "totalCount": 1211,
+        "items": null
+      }
+    }
   },
-  "errors": [{ "message": "Products unavailable", "path": ["productType", "products", "items"] }]
+  "errors": [
+    {
+      "message": "Products unavailable",
+      "path": ["productType", "products", "items"]
+    }
+  ]
 }
 ```
 
 Der HTTP-Statuscode ist trotzdem `200`, also **prüfe `errors` selbst**. Relay gibt die Teildaten an die Komponenten weiter, das fehlerhafte Feld ist `null`.
 
-Aus der Praxis: Der GraphQL-Server selbst steht selten im Weg, aber **die Fehlerbehandlung wird aufwändiger**. Für jede mögliche Teilantwort braucht die Seite ein sinnvolles Verhalten.
+> [!NOTE]
+> **Aus der Praxis:** Der GraphQL-Server selbst steht selten im Weg, aber **die Fehlerbehandlung wird aufwändiger**. Für jede mögliche Teilantwort braucht die Seite ein sinnvolles Verhalten.
 
 Doku: [Response](https://graphql.org/learn/response/), [Relay: Field Errors](https://relay.dev/docs/guides/catch-directive/)
 
 ## Fragments: jede Komponente deklariert ihre Daten
 
-Eine Query pro Seite löst den Wasserfall für den Browser. **Aber wer schreibt sie?** Die Seite besteht aus Komponenten, und jede braucht Daten aus einer anderen Domäne:
+Eine Query pro Seite löst den Wasserfall für den Browser. **Aber wer schreibt diese Query?**  
+Die Seite besteht aus Komponenten, und jede braucht Daten aus einer anderen Domäne:
 
 ![Die Seite aufgeteilt in Komponenten: ProductTypePage umschliesst CategoryNavigation, ProductTypeHeader und ProductList, und ProductList rendert ProductTile](./assets/page-components.png)
 
@@ -420,10 +451,15 @@ _Die Frontend-Beispiele auf dieser Seite nutzen den GraphQL-Client [Relay](https
 Ein Compiler liest die `graphql`-Tags zusammen mit dem Schema und erzeugt TypeScript-Typen, wie OpenAPI-Codegen bei REST. `useFragment` liefert der Komponente genau die Felder ihres Fragments:
 
 ```tsx
+import type { FunctionComponent } from "react";
 import { graphql, useFragment } from "react-relay";
 import type { ProductTile_product$key } from "./__generated__/ProductTile_product.graphql";
 
-export function ProductTile(props: { product: ProductTile_product$key }) {
+type ProductTileProps = {
+  product: ProductTile_product$key;
+};
+
+export const ProductTile: FunctionComponent<ProductTileProps> = ({ product: productKey }) => {
   // 👇 unmask: only the fields of ProductTile_product
   const product = useFragment(
     graphql`
@@ -443,7 +479,7 @@ export function ProductTile(props: { product: ProductTile_product$key }) {
         }
       }
     `,
-    props.product
+    productKey
   );
   return (
     <article>
@@ -457,7 +493,7 @@ export function ProductTile(props: { product: ProductTile_product$key }) {
       <Rating average={product.rating?.average} count={product.rating?.count} />
     </article>
   );
-}
+};
 ```
 
 ### Die Query der Seite zusammensetzen
@@ -465,7 +501,13 @@ export function ProductTile(props: { product: ProductTile_product$key }) {
 `ProductList` fragt die Anzahl an und setzt das Fragment der Kachel in jedes Item ein:
 
 ```tsx
-export function ProductList(props: { productType: ProductList_productType$key }) {
+type ProductListProps = {
+  productType: ProductList_productType$key;
+};
+
+export const ProductList: FunctionComponent<ProductListProps> = ({
+  productType: productTypeKey
+}) => {
   const productType = useFragment(
     graphql`
       fragment ProductList_productType on ProductType {
@@ -478,7 +520,7 @@ export function ProductList(props: { productType: ProductList_productType$key })
         }
       }
     `,
-    props.productType
+    productTypeKey
   );
   return (
     <>
@@ -488,13 +530,17 @@ export function ProductList(props: { productType: ProductList_productType$key })
       ))}
     </>
   );
-}
+};
 ```
 
 `ProductTypePage`, die Seitenkomponente, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen und lädt die Daten mit `useLazyLoadQuery`:
 
 ```tsx
-export function ProductTypePage(props: { id: string }) {
+type ProductTypePageProps = {
+  id: string;
+};
+
+export const ProductTypePage: FunctionComponent<ProductTypePageProps> = ({ id }) => {
   const data = useLazyLoadQuery<ProductTypePageQuery>(
     graphql`
       query ProductTypePageQuery($id: ID!) {
@@ -505,7 +551,7 @@ export function ProductTypePage(props: { id: string }) {
         }
       }
     `,
-    { id: props.id }
+    { id }
   );
   if (!data.productType) return null;
   return (
@@ -515,7 +561,7 @@ export function ProductTypePage(props: { id: string }) {
       <ProductList productType={data.productType} />
     </>
   );
-}
+};
 ```
 
 An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**.
@@ -524,7 +570,7 @@ Braucht die Kachel ein Feld, das es im Schema schon gibt, änderst du nur `Produ
 
 ### Data Masking
 
-**Data Masking** versteckt die Felder anderer Komponenten. `props.product` kommt maskiert an: Erst `useFragment` mit dem eigenen Fragment gibt die Felder frei. In `ProductList` heisst das:
+**Data Masking** versteckt die Felder anderer Komponenten. Die Prop `product` kommt maskiert an: Erst `useFragment` mit dem eigenen Fragment gibt die Felder frei. In `ProductList` heisst das:
 
 ```tsx
 item.id; // fine: ProductList asked for it
@@ -561,7 +607,8 @@ JSON:API nennt das **Inclusion of Related Resources**, Stripe **Expanding** eine
 - **Die Daten müssen dort erreichbar sein.** Der Produktlisten-Service kann Produkte nur einbetten, wenn er an die Daten des Produkt-Services herankommt. Kann er das nicht, funktioniert das Muster gar nicht.
 - **Jeder Endpoint implementiert es neu**, auch für tiefere Daten wie `include=products.brand`.
 
-Aus der Praxis: Bei den Kommentaren eines Blogposts haben wir die Antworten auf jeden Kommentar per `include` mitgeladen, also eine verschachtelte Pagination in einem Request. Die Benutzerdaten zu den Kommentaren kamen aber nicht mit, dafür brauchte es einen weiteren Request pro Kommentar. Der Gewinn war bescheiden.
+> [!NOTE]
+> **Aus der Praxis:** Bei den Kommentaren eines Blogposts haben wir die Antworten auf jeden Kommentar per `include` mitgeladen, also eine verschachtelte Pagination in einem Request. Die Benutzerdaten zu den Kommentaren kamen aber nicht mit, dafür brauchte es einen weiteren Request pro Kommentar. Der Gewinn war bescheiden.
 
 GraphQL löst die Verknüpfung einmal in den Resolvern (gegen N+1 mit DataLoader), und jede Query nutzt sie.
 

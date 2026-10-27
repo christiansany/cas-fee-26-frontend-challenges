@@ -199,11 +199,11 @@ In React lädst du mit `lazy` den Code einer Komponente erst, wenn sie zum erste
 Dabei gelten drei Regeln. Das Modul muss die Komponente als `default`-Export exportieren. Deklariere die Lazy-Komponente auf oberster Ebene des Moduls, nie innerhalb einer anderen Komponente, sonst wird ihr State bei jedem Render zurückgesetzt. Und während der Code lädt, suspendiert die Komponente (React pausiert ihr Rendering). Pack sie deshalb in eine `<Suspense>`-Boundary mit Fallback.
 
 ```tsx
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type FunctionComponent } from "react";
 
 const LazyComponent = lazy(() => import("./LazyComponent.tsx"));
 
-export default function App() {
+const App: FunctionComponent = () => {
   return (
     <div className="App">
       <Suspense fallback={<p>Loading…</p>}>
@@ -212,7 +212,9 @@ export default function App() {
       </Suspense>
     </div>
   );
-}
+};
+
+export default App;
 ```
 
 Doku: [react.dev: lazy](https://react.dev/reference/react/lazy), [react.dev: Suspense](https://react.dev/reference/react/Suspense)
@@ -220,12 +222,12 @@ Doku: [react.dev: lazy](https://react.dev/reference/react/lazy), [react.dev: Sus
 Anstatt in React direkt mit dem `IntersectionObserver` zu arbeiten, kannst du das [`react-intersection-observer`-Package](https://www.npmjs.com/package/react-intersection-observer) nutzen. Es wird aktiv gepflegt und unterstützt React 19. Es nutzt den `IntersectionObserver` unter der Haube und stellt dir einen Hook zur Verfügung, der dir sagt, ob ein Element im Viewport ist.
 
 ```tsx
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type FunctionComponent } from "react";
 import { useInView } from "react-intersection-observer";
 
 const LazyComponent = lazy(() => import("./LazyComponent.tsx"));
 
-export default function App() {
+const App: FunctionComponent = () => {
   const { ref, inView } = useInView({
     triggerOnce: true
   });
@@ -248,7 +250,9 @@ export default function App() {
       </div>
     </div>
   );
-}
+};
+
+export default App;
 ```
 
 **Demo** 🤯
