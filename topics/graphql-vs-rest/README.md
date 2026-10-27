@@ -460,7 +460,6 @@ type ProductTileProps = {
 };
 
 export const ProductTile: FunctionComponent<ProductTileProps> = ({ product: productKey }) => {
-  // 👇 unmask: only the fields of ProductTile_product
   const product = useFragment(
     graphql`
       fragment ProductTile_product on Product {
