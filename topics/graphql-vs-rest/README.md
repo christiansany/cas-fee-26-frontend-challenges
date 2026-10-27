@@ -632,25 +632,16 @@ Doku: [Apollo Client: Caching](https://www.apollographql.com/docs/react/caching/
 
 GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
 
-| Thema             | REST                                                                                   | GraphQL                                                                                                                                                                   |
-| ----------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den Caches überspringen. Abhilfe: **Persisted Queries** (siehe unten).                                                                      |
-| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                    | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                                                      |
-| **Fehler**        | Ein Statuscode pro Request.                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                                            |
-| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                   | Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen. |
-| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries (**Trusted Documents**) und begrenzt Tiefe und Kosten.                          |
-| **Betrieb**       | Die Endpoints der Services, die es ohnehin gibt.                                       | Ein zusätzlicher Server, den jemand betreiben muss, dazu Codegen und Schema-Checks im CI.                                                                                 |
+| Thema             | REST                                                                                   | GraphQL                                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Caching**       | Die URL ist der Cache-Key. Browser und CDNs speichern einen `GET` mit `Cache-Control`. | Meist ein `POST` an eine URL, den HTTP-Caches überspringen. Gecacht wird stattdessen im Client.                                                                                                                                         |
+| **HTTP-Features** | Redirects und Datei-Uploads sind gewöhnliches HTTP.                                    | Nicht Teil von GraphQL. Dateien laufen meist über gewöhnliches HTTP.                                                                                                                                                                    |
+| **Fehler**        | Ein Statuscode pro Request.                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                                                                                                          |
+| **Autorisierung** | Wird in jedem Route Handler geprüft.                                                   | Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen.                                                               |
+| **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries: Der Client schickt statt des Query-Texts eine ID (**Persisted Queries**, auch Trusted Documents). Dazu begrenzt der Server Tiefe und Kosten. |
+| **Betrieb**       | Die Endpoints der Services, die es ohnehin gibt.                                       | Ein zusätzlicher Server, den jemand betreiben muss, dazu Codegen und Schema-Checks im CI.                                                                                                                                               |
 
 Doku: [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
-
-<details>
-<summary>Weiterführend: Caching mit Persisted Queries</summary>
-
-Queries dürfen mit `GET` geschickt werden, und das können Caches speichern. Lange Queries passen nicht in die Längenlimits von URLs, deshalb schickt der Client statt des Query-Texts eine kurze Kennung, eine **Persisted Query**: `GET /graphql?documentId=<hash>&variables=...` (die Parameternamen unterscheiden sich je nach Tool). Der Server muss trotzdem `Cache-Control` senden, und eine Response, die öffentliche Produktdaten mit Daten der eingeloggten Person mischt, darf nicht öffentlich gecacht werden.
-
-Doku: [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/)
-
-</details>
 
 ## GraphQL und REST in einer grossen Firma
 
