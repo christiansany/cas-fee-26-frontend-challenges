@@ -11,4 +11,4 @@
 
 ## Archiv
 
-Themen, die gerade nicht auf dem Menü stehen: [Archiv](./archive/README.md).
+[Archiv](./archive/README.md)
