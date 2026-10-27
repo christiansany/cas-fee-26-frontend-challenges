@@ -8,8 +8,6 @@
   Dauer: etwa 90 Minuten
 - **[Over- und Under-Fetching lösen mit GraphQL](./topics/graphql-vs-rest/README.md)**: Mit REST lädt eine Seite ihre Daten aus mehreren Services in Runden nacheinander und bekommt zu viele und zu wenige Daten.\
   Dauer: etwa 60 Minuten
-- **[Listen, Filter und Pagination](./topics/lists-and-pagination/README.md)**: Nach einem Reload, einem geteilten Link oder Zurück sind die Filter einer Liste weg.\
-  Dauer: etwa 30 Minuten
 
 ## Archiv
 

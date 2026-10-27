@@ -2,10 +2,11 @@
 
 Kapitel, die gerade nicht auf dem Menü stehen. Sie bleiben hier, damit sie zurückkommen können.
 
-## Geschrieben 2026, auf Englisch
+## Geschrieben 2026
 
-- [When parts of the page fail](./partial-failures/README.md), etwa 40 Minuten
-- [Logging and debugging in production](./logging/README.md), etwa 40 Minuten
+- [Listen, Filter und Pagination](./lists-and-pagination/README.md), etwa 30 Minuten
+- [When parts of the page fail](./partial-failures/README.md), etwa 40 Minuten, auf Englisch
+- [Logging and debugging in production](./logging/README.md), etwa 40 Minuten, auf Englisch
 
 ## Aus 2024
 
