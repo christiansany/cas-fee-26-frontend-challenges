@@ -1,13 +1,13 @@
 # Over- und Under-Fetching lösen mit GraphQL
 
-**Das Problem:** Mit REST lädt eine Seite ihre Daten aus mehreren Services in Runden nacheinander und bekommt zu viele und zu wenige Daten.
+**Das Problem:** Mit REST lädt eine Seite ihre Daten aus mehreren Services in Runden nacheinander (Wasserfall) und bekommt zu viele und zu wenige Daten.
 
 **Dauer:** etwa 60 Minuten
 
 ## Inhalt
 
 - [REST in Kürze](#rest-in-kürze)
-- [Das Beispiel: eine Seite, drei Teams](#das-beispiel-eine-seite-drei-teams)
+- [Das Beispiel: eine Seite, drei Domänen](#das-beispiel-eine-seite-drei-domänen)
 - [Das Problem: die Seite mit REST laden](#das-problem-die-seite-mit-rest-laden)
 - [Die Lösung: GraphQL](#die-lösung-graphql)
 - [Fragments: jede Komponente deklariert ihre Daten](#fragments-jede-komponente-deklariert-ihre-daten)
@@ -35,27 +35,27 @@ Accept: application/json
 
 Verwandte Ressourcen erscheinen oft als Links (`href`), denen der Client mit dem nächsten Request folgt.
 
-Gehören API und Frontend demselben Team, ist ein neues Feld auf einer Seite eine Änderung an einem Route Handler. Das funktioniert nicht mehr, sobald die Seite Daten aus **Services anderer Teams** braucht.
+Braucht eine Seite Daten aus einer einzigen API, ist ein neues Feld eine Änderung an einem Route Handler. Das reicht nicht mehr, sobald die Seite Daten aus **mehreren Services** braucht.
 
-## Das Beispiel: eine Seite, drei Teams
+## Das Beispiel: eine Seite, drei Domänen
 
-Unser Beispiel ist eine echte Seite: [Audio-Steckverbinder auf galaxus.ch](https://www.galaxus.ch/en/s1/producttype/audio-connectors-3137). Die Teams, APIs und Responses dazu sind **erfunden**. Sie beschreiben nicht, wie Galaxus gebaut ist.
+Unser Beispiel ist eine echte Seite: [Audio-Steckverbinder auf galaxus.ch](https://www.galaxus.ch/en/s1/producttype/audio-connectors-3137). Die APIs und Responses dazu sind **erfunden**. Sie beschreiben nicht, wie Galaxus gebaut ist.
 
-Drei Teams teilen sich die Seite:
+Die Daten der Seite kommen aus drei Domänen:
 
-- Dem **Navigations-Team** gehört die Seite selbst mit Titel, Breadcrumb und Sidebar.
-- Dem **Produktlisten-Team** gehört die Liste: welche Produkte zu den Filtern passen, wie viele es sind und in welcher Reihenfolge.
-- Dem **Produkt-Team** gehören die Kacheln: Name, Marke, Preis, Bilder und Bewertungen eines Produkts.
+- **Navigation:** die Seite selbst mit Titel, Breadcrumb und Sidebar.
+- **Produktlisten:** welche Produkte zu den Filtern passen, wie viele es sind und in welcher Reihenfolge.
+- **Produkte:** Name, Marke, Preis, Bilder und Bewertungen jeder Kachel.
 
-![Die Produkttyp-Seite des Navigations-Teams, darin die Liste des Produktlisten-Teams und darin die Kacheln des Produkt-Teams](./assets/page-teams.png)
+![Die Produkttyp-Seite aus der Navigation, darin die Produktliste und darin die Produktkacheln](./assets/page-domains.png)
 
-Jedes Team betreibt einen eigenen Service mit eigener REST API. **Die Verschachtelung ist auch die Ladereihenfolge:** Die Seite braucht die Produktliste, und die Liste braucht die Produkte.
+Jede Domäne hat einen eigenen Service mit eigener REST API. **Die Verschachtelung ist auch die Ladereihenfolge:** Die Seite braucht die Produktliste, und die Liste braucht die Produkte.
 
 ## Das Problem: die Seite mit REST laden
 
-### Runde 1: der Produkttyp vom Navigations-Team
+### Runde 1: der Produkttyp aus der Navigation
 
-Die Produkttyp-ID `3137` steht in der URL. Das Navigations-Team liefert Titel, Breadcrumb und Sidebar:
+Die Produkttyp-ID `3137` steht in der URL. Der Navigations-Service liefert Titel, Breadcrumb und Sidebar:
 
 ```jsonc
 // GET /api/product-types/3137
@@ -76,7 +76,7 @@ Die Produkttyp-ID `3137` steht in der URL. Das Navigations-Team liefert Titel, B
 }
 ```
 
-### Runde 2: die Produktliste vom Produktlisten-Team
+### Runde 2: die Produktliste
 
 Die Produktliste ist nur verlinkt, der Browser muss also **auf Runde 1 warten**:
 
@@ -94,9 +94,9 @@ Die Produktliste ist nur verlinkt, der Browser muss also **auf Runde 1 warten**:
 }
 ```
 
-### Runde 3: die Produkte vom Produkt-Team
+### Runde 3: die Produkte
 
-Der Browser fragt das Produkt-Team **für jedes der 48 Produkte** einzeln an:
+Der Browser fragt den Produkt-Service **für jedes der 48 Produkte** einzeln an:
 
 ```jsonc
 // GET /api/products/5862971
@@ -216,7 +216,7 @@ type Product {
 # Category, NavigationEntry, Brand, Money and Rating are left out
 ```
 
-**Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Service des Produktlisten-Teams es beantwortet.
+**Das Schema versteckt die Services.** `ProductType.products` sieht aus wie ein gewöhnliches Feld, obwohl der Produktlisten-Service es beantwortet.
 
 Die Seite schickt **eine Query mit allem, was sie anzeigt**. `$id` ist eine **Variable**, wie ein Routenparameter.
 
@@ -368,12 +368,12 @@ Doku: [Response](https://graphql.org/learn/response/), [Relay: Field Errors](htt
 
 ## Fragments: jede Komponente deklariert ihre Daten
 
-Eine Query pro Seite löst den Wasserfall für den Browser. **Aber wer schreibt sie?** Die Seite besteht aus Komponenten, und die Komponenten gehören den drei Teams:
+Eine Query pro Seite löst den Wasserfall für den Browser. **Aber wer schreibt sie?** Die Seite besteht aus Komponenten, und jede braucht Daten aus einer anderen Domäne:
 
 ![Die Seite aufgeteilt in Komponenten: ProductTypePage umschliesst CategoryNavigation, ProductTypeHeader und ProductList, und ProductList rendert ProductTile](./assets/page-components.png)
 
-- Schreibt **die Seite** die Query, listet sie jedes Feld jedes Teams auf. Jedes neue Feld auf einer Kachel heisst, die Query der Seite anzupassen, und niemand wagt es, ein Feld zu entfernen, also wächst die Query nur.
-- Holt **jede Komponente** ihre eigenen Daten, sind die Teams wieder unabhängig, aber wir sind zurück bei vielen Requests und Wasserfällen.
+- Schreibt **die Seite** die Query, listet sie jedes Feld jeder Komponente auf. Jedes neue Feld auf einer Kachel heisst, die Query der Seite anzupassen, und niemand wagt es, ein Feld zu entfernen, also wächst die Query nur.
+- Holt **jede Komponente** ihre eigenen Daten, sind die Komponenten unabhängig, aber wir sind zurück bei vielen Requests und Wasserfällen.
 
 Die Lösung heisst **Colocation**: Jede Komponente deklariert ihre Felder direkt neben ihrem Code, als **Fragment**. Ein Fragment ist eine benannte Liste von Feldern auf einem Typ, und `...Name` fügt es in eine Query ein. Ein Name wie `ProductTile_product` bedeutet: was `ProductTile` von einem `product` braucht.
 
@@ -459,7 +459,7 @@ export function ProductList(props: { productType: ProductList_productType$key })
 }
 ```
 
-`ProductTypePage`, die Seitenkomponente des Navigations-Teams, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen und lädt die Daten mit `useLazyLoadQuery`:
+`ProductTypePage`, die Seitenkomponente, setzt nur die Fragments der direkt untergeordneten Komponenten zusammen und lädt die Daten mit `useLazyLoadQuery`:
 
 ```tsx
 export function ProductTypePage(props: { id: string }) {
@@ -488,11 +488,11 @@ export function ProductTypePage(props: { id: string }) {
 
 An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**.
 
-Fügt das Produkt-Team der Kachel ein Feld hinzu, das es im Schema schon gibt, ändert das Team nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
+Braucht die Kachel ein Feld, das es im Schema schon gibt, änderst du nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
 
 ### Data Masking
 
-**Data Masking** versteckt die Felder anderer Teams. `props.product` kommt maskiert an: Erst `useFragment` mit dem eigenen Fragment gibt die Felder frei. In `ProductList` heisst das:
+**Data Masking** versteckt die Felder anderer Komponenten. `props.product` kommt maskiert an: Erst `useFragment` mit dem eigenen Fragment gibt die Felder frei. In `ProductList` heisst das:
 
 ```tsx
 item.id; // fine: ProductList asked for it
@@ -507,7 +507,7 @@ Doku: [Fragments](https://graphql.org/learn/queries/#fragments)
 
 ### Parallel laden, Batch und BFF
 
-Unser REST-Beispiel ist bewusst naiv. Ein REST-Team kann den Wasserfall stark verkürzen:
+Unser REST-Beispiel ist bewusst naiv. Auch mit REST lässt sich der Wasserfall stark verkürzen:
 
 - **Parallel laden.** Die Seite kennt `productTypeId` aus ihrer URL. Produkttyp und Liste warten nur aufeinander, weil wir dem Link folgen.
 - **Ein Batch-Endpoint.** `GET /api/products?ids=5862971,3376520,...` statt 48 einzelner Requests.
@@ -553,7 +553,7 @@ GraphQL verschiebt Arbeit vom Client auf den Server und ins Tooling:
 | **Fehler**        | Ein Statuscode pro Request.                                                            | Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst es.                                                                            |
 | **Autorisierung** | Wird in jedem Route Handler geprüft.                                                   | Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen. |
 | **Teure Queries** | Jeder Request ist im Voraus bekannt.                                                   | Clients schreiben ihre eigenen. In Produktion erlaubt der Server oft nur bekannte Queries (**Trusted Documents**) und begrenzt Tiefe und Kosten.                          |
-| **Betrieb**       | Endpoints, die die Teams ohnehin betreiben.                                            | Ein zusätzlicher Server, den ein Team betreibt, dazu Codegen und Schema-Checks im CI.                                                                                     |
+| **Betrieb**       | Die Endpoints der Services, die es ohnehin gibt.                                       | Ein zusätzlicher Server, den jemand betreiben muss, dazu Codegen und Schema-Checks im CI.                                                                                 |
 
 Doku: [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
 
@@ -568,9 +568,9 @@ Doku: [Auslieferung über HTTP](https://graphql.org/learn/serving-over-http/)
 
 ## GraphQL und REST in einer grossen Firma
 
-Ein grosser Shop nutzt **beides**. Im Hintergrund betreibt jedes Team eigene Services mit eigener Datenbank. Davor sitzen zwei Arten von Einstiegspunkten:
+Ein grosser Shop nutzt **beides**. Im Hintergrund hat jede Domäne einen eigenen Service mit eigener Datenbank. Davor sitzen zwei Arten von Einstiegspunkten:
 
-![Ein GraphQL-Server für die Daten der Seiten, REST-Endpoints für alles andere, dahinter die Services der Teams, die GraphQL oder REST sprechen](./assets/large-company.png)
+![Ein GraphQL-Server für die Daten der Seiten, REST-Endpoints für alles andere, dahinter die Services der Domänen, die GraphQL oder REST sprechen](./assets/large-company.png)
 
 - **Ein GraphQL-Server** für die Seiten des Webshops und der Mobile App. Beide Clients fragen dasselbe Schema nach genau dem, was jeder Screen braucht.
 - **REST-Endpoints** für alles, was gewöhnliches HTTP ist oder mit der Aussenwelt spricht: Login mit seinen Redirects, Datei-Uploads, Webhooks eines Payment-Providers und eine öffentliche API für Partnershops, die stabile URLs und eine Dokumentation in OpenAPI erwarten.
@@ -579,22 +579,22 @@ Hinter dem GraphQL-Server müssen keine REST-Services stehen. **Bieten die Servi
 
 GitHub zum Beispiel bietet seine öffentliche API als REST und als GraphQL an und [vergleicht beide in der Doku](https://docs.github.com/en/rest/about-the-rest-api/comparing-githubs-rest-api-and-graphql-api).
 
-Ein einzelner GraphQL-Server, der 30 Services aufruft, **wird selbst zum Flaschenhals**: Jedes neue Feld braucht das Team, das ihn betreibt. Grosse Firmen teilen den Graphen deshalb oft auf, sodass jedes Team seinen Teil des Schemas betreibt und ein Gateway die Teile zu einem zusammenfügt. Das nennt sich **Federation**.
+Ein einzelner GraphQL-Server, der 30 Services aufruft, **wird selbst zum Flaschenhals**: Jedes neue Feld muss durch diesen einen Server. Grosse Firmen teilen das Schema deshalb nach Domänen auf: Jeder Domänen-Service liefert seinen Teil, und ein Gateway fügt die Teile zu einem Schema zusammen. Das nennt sich **Federation**.
 
 | Situation                                                                                          | Einsatz               |
 | -------------------------------------------------------------------------------------------------- | --------------------- |
-| Ein Team, eine App, eine Handvoll Ressourcen                                                       | REST                  |
-| Ein Client, dessen Team auch einen BFF betreiben kann                                              | REST mit BFF          |
+| Eine App, eine Handvoll Ressourcen                                                                 | REST                  |
+| Ein Client, für den sich ein eigener BFF lohnt                                                     | REST mit BFF          |
 | Öffentliche Daten, die ein CDN cachen soll, Datei-Uploads, Login-Redirects, Webhooks, Partner-APIs | REST                  |
 | Mehrere Clients oder viele Seiten, die Daten aus vielen Services kombinieren                       | GraphQL               |
-| Viele Teams, die Teile derselben Seite bauen                                                       | GraphQL mit Fragments |
+| Viele Komponenten, die Daten aus mehreren Domänen brauchen                                         | GraphQL mit Fragments |
 
 Doku: [graphql.org: Federation](https://graphql.org/learn/federation/)
 
 ## Zusammenfassung
 
-- **GraphQL löst Over- und Under-Fetching für den Browser:** Die Seite fragt in einem Request genau ihre Felder an, Resolver holen sie bei den Services der Teams.
-- Mit Fragments deklariert jede Komponente ihre eigenen Felder, und die Teams bleiben unabhängig.
+- **GraphQL löst Over- und Under-Fetching für den Browser:** Die Seite fragt in einem Request genau ihre Felder an, Resolver holen sie bei den Services der Domänen.
+- Mit Fragments deklariert jede Komponente ihre eigenen Felder und bleibt unabhängig von den anderen.
 - Mit REST lädt dieselbe Seite als Wasserfall. Batch-Endpoints und ein BFF helfen, brauchen aber Arbeit pro Seite.
 - Der Preis: Mit GraphQL verlierst du das Caching über die URL und ehrliche Statuscodes, dazu kommen aufwändigere Fehlerbehandlung und ein Server, den jemand betreibt.
 - An den Rändern bleibt REST: Login, Uploads, Webhooks und öffentliche APIs.
