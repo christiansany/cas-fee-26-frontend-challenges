@@ -636,7 +636,7 @@ GraphQL löst das Laden der Daten, bringt aber eigene Grenzen mit:
 - **Statuscodes sagen wenig.** Ein fehlgeschlagenes Feld liefert meist `200`. Monitoring, das Statuscodes zählt, verpasst den Fehler.
 - **Nicht alles ist GraphQL.** Datei-Uploads und Redirects sind nicht Teil von GraphQL und laufen meist über gewöhnliches HTTP.
 - **Autorisierung pro Feld.** Viele Queries erreichen dasselbe Feld. Prüfe Berechtigungen deshalb einmal, im Code hinter den Resolvern, nicht pro Query. Vergisst du es, ist jeder Pfad zum Feld offen.
-- **Teure Queries.** Clients können beliebig tiefe Queries schreiben. In Produktion erlaubt der Server deshalb oft nur bekannte Queries: Der Client schickt statt des Query-Texts eine ID (**Persisted Queries**). Dazu begrenzt der Server Tiefe und Kosten.
+- **Teure Queries.** Clients können beliebig tiefe Queries schreiben. In Produktion führt der Server deshalb oft nur bekannte Queries und Mutations aus: Der Client schickt statt des Texts eine ID (**Trusted Documents**). Dazu begrenzt der Server Tiefe und Kosten.
 - **Ein Server mehr.** Jemand muss den GraphQL-Server betreiben, dazu kommen Codegen und Schema-Checks im CI.
 
 Doku: [Autorisierung](https://graphql.org/learn/authorization/), [Sicherheit](https://graphql.org/learn/security/)
