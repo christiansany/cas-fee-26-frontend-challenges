@@ -524,9 +524,13 @@ export const ProductList: FunctionComponent<ProductListProps> = ({
   return (
     <>
       <h2>{productType.products.totalCount} products</h2>
-      {productType.products.items?.map((item) => (
-        <ProductTile key={item.id} product={item} />
-      ))}
+      <ul>
+        {productType.products.items?.map((item) => (
+          <li key={item.id}>
+            <ProductTile product={item} />
+          </li>
+        ))}
+      </ul>
     </>
   );
 };
@@ -552,6 +556,7 @@ export const ProductTypePage: FunctionComponent<ProductTypePageProps> = ({ id })
     `,
     { id }
   );
+  // 👇 the 404 case: no product type exists for the id from the URL
   if (!data.productType) return null;
   return (
     <>
@@ -563,20 +568,26 @@ export const ProductTypePage: FunctionComponent<ProductTypePageProps> = ({ id })
 };
 ```
 
+Steht in der URL eine ID, zu der es keinen Produkttyp gibt, antwortet der Server mit `productType: null`. Das ist der 404-Fall. `null` kommt aber auch, wenn der Resolver mit einem Fehler abbricht, dann zusätzlich mit einem Eintrag in `errors`. **Das Beispiel unterscheidet die beiden Fälle nicht, eine echte Anwendung muss das**: Bei einem 404 zeigt sie eine Seite "nicht gefunden", bei einem Fehler eine Fehlermeldung.
+
 An jeder Stelle `...Name` setzt GraphQL die Felder des Fragments ein. Beim Server kommen also dieselben Felder an wie in der Query weiter oben (plus `id`), und **die Seite schickt weiterhin einen Request**.
 
-Braucht die Kachel ein Feld, das es im Schema schon gibt, änderst du nur `ProductTile` und dessen Fragment. **Die Query der Seite bleibt, wie sie ist.**
+### Eine Kachel für viele Seiten
 
-### Data Masking
+Die Kachel bringt ihr Fragment mit. **Damit passt sie auf jede Seite, die Produkte zeigt**: Produkttyp, Suche, Merkliste, Empfehlungen. Jede dieser Seiten setzt `...ProductTile_product` in ihre Query ein, zum Beispiel eine Merkliste:
 
-**Data Masking** versteckt die Felder anderer Komponenten. Die Prop `product` kommt maskiert an: Erst `useFragment` mit dem eigenen Fragment gibt die Felder frei. In `ProductList` heisst das:
-
-```tsx
-item.id; // fine: ProductList asked for it
-item.price; // TypeScript error, and undefined at runtime: only ProductTile asked for it
+```graphql
+query WishlistPageQuery {
+  wishlist {
+    items {
+      id
+      ...ProductTile_product
+    }
+  }
+}
 ```
 
-**Entfernst du ein Feld aus deinem Fragment, kann nur deine eigene Komponente kaputtgehen.**
+Braucht die Kachel ein neues Feld, änderst du nur ihr Fragment. **Jede Query, die das Fragment einsetzt, lädt das Feld ab dann automatisch mit.** Keine der Seiten muss ihre Query anpassen.
 
 Doku: [Fragments](https://graphql.org/learn/queries/#fragments)
 
